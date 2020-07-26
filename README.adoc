@@ -1,0 +1,7 @@
+= KVM with a IPv6-first setup
+
+This repository contains a book which describes how to setup a Linux-based KVM hypervisor, virtual machines and services on them.
+It follows an "IPv6-first" approach.
+I.e. all systems are setup with IPv6 being the only mandatory IP protocol.
+IPv4 is only added to reach services on virtual machines for clients which still do not have IPv6 connectivity.
+
