@@ -1,0 +1,20 @@
+= Epilogue
+
+This is the epilogue.
+
+== Experiences and lessons learned
+
+I use the setup described here since October 2018 for my own internet server which serves multiple web sites, my complete private e-mail and a number of other services.
+The system works very reliably, I only had severe problems once when Ubuntu published a broken kernel which crashed the system constantly.
+Apart from that, routing, networking in general and the whole virtualisation do not make any problems.
+
+Very early in the process, I learned that even in 2018, you cannot survive in the internet without IPv4 connectivity.
+In the beginning, I even planned to go without the NAT64/DNS64, but there are too many services which are unreachable then as they are only accessible via IPv4.
+
+I also had to relax my "No IPv4"-policy for the virtual machines.
+E.g. e-mail servers can simply not be made available without direct IPv4 connectivity - or no IPv4-only mail servers will deliver any e-mail to them.
+For all more sophisticated services like video conferencing servers this also holds true.
+Therefore, adding an IPv4 address to the virtual machines is far more often needed than I hoped.
+However, it is important that this is _always_ only an "on top" connectivity.
+Everything continues to work if you remove the IPv4 infrastructure - it is only unreachable from the "IPv4 internet" then.
+Hopefully, in the not too distance future this becomes less and less of an issue so that a true IPv6-only setup can be used without any disadvantages.

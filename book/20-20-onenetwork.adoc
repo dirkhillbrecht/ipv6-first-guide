@@ -1,0 +1,642 @@
+== Physical hosts with one /64 network
+
+IPv6 standards define that every host with IPv6 connectivity must have at least one /64 network assigned.
+Such an environment is the German hosting provider Hetzner Online:
+They only route _one_ /64 network to each host.
+That disallows any routed setup between the physical host and the virtual machines.
+We'll use the only network we have to access the physical host _and_ all virtual machines.
+The default gateway for the physical host will be the link-local address pointing to Hetzner's infrastructure.
+The default gateway for the virtual machines will be the physical host.
+
+.Why Hetzner Online?
+[NOTE]
+====
+This document wants to be an independent guide for setting up IPv6-first setups.
+However, my main information and research source are the servers I administrate myself.
+They are located at the German hoster Hetzner Online, so my knowledge and experience comes mainly from their environment.
+
+Hopefully, in the future other environments are added to this guide to make it less centric about one special provider.
+====
+
+=== Initial setup of the host system at Hetzner's
+
+If you rent the Hetzner server, order it with the "rescue system" booted.
+That gives the most control over how the system is configured.
+I suggest that you access the server in this early stage by its IP address only.
+We'll change the IPv6 address of the system later in the install process.
+If you want to have a DNS entry, use something interim to throw away later, e.g. `<plannedname>-install.example.org`.
+
+I obtained my server in Hetzner's "rescue system" which allows the OS installation through the `installimage` script.
+I wanted to work with as much default components and configurations as possible, so I decided for the Ubuntu 20.04 footnote:[This guide often refers to Ubuntu 18.04. I fact, installation works the same on both if not stated otherwise explicitly.] install image offered by Hetzner.
+
+.Stay with default setups as much as possible
+IMPORTANT: I strongly advise you to always stick with the offered setups from your hosting provider as much as possible.
+It increases your chance for support and your chances are much higher to find documentation if you run into problems.
+
+Logging into the new server gives you a welcoming login screen somehow like this:
+
+.Login messages in a Hetzner rescue system
+----
+dh@workstation:~$ ssh -l root 2a01:4f8:1:3::2
+The authenticity of host '2a01:4f8:1:3::2 (2a01:4f8:1:3::2)' can't be established.
+ECDSA key fingerprint is SHA256:dbSkzn0MlzoJXr8yeEuR0pNp9FEH4mNsfKgectkTedk.
+Are you sure you want to continue connecting (yes/no)? yes
+Warning: Permanently added '2a01:4f8:1:3::2' (ECDSA) to the list of known hosts.
+
+-------------------------------------------------------------------
+
+  Welcome to the Hetzner Rescue System.
+
+  This Rescue System is based on Debian 8.0 (jessie) with a newer
+  kernel. You can install software as in a normal system.
+
+  To install a new operating system from one of our prebuilt
+  images, run 'installimage' and follow the instructions.
+
+  More information at http://wiki.hetzner.de
+
+-------------------------------------------------------------------
+
+Hardware data:
+
+   CPU1: AMD Athlon(tm) 64 X2 Dual Core Processor 5600+ (Cores 2)
+   Memory:  3704 MB
+   Disk /dev/sda: 750 GB (=> 698 GiB) 
+   Disk /dev/sdb: 750 GB (=> 698 GiB) 
+   Total capacity 1397 GiB with 2 Disks
+
+Network data:
+   eth0  LINK: yes
+         MAC:  00:24:21:21:ac:99
+         IP:   241.61.86.241
+         IPv6: 2a01:4f8:1:3::2/64-/77777777777
+         RealTek RTL-8169 Gigabit Ethernet driver
+
+root@rescue ~ #
+----
+
+You might want to write down MAC address and IP addresses of the system.
+Note, however, that they are also included in the delivery e-mail sent by Hetzner when the server is ready.
+
+.SSH keys for Hetzner rescue images
+TIP: If you put your ssh public key into your Hetzner account and select it in the order process for the machine, it will not only be put into the rescue system but also into the root account of the freshly installed machine.
+If you work this way, you never have to enter any passwords during the installation process. You can also select it each time you request a rescue system.
+
+The system has two harddisks. I use them as a software RAID 1 as offered by the install script.
+This allows for at least some desaster recovery in case of a disk failure.
+And for systems like this, I do not install any partitions at all (apart from the Hetzner-suggested swap and /boot partition).
+The KVM disks will go to qcow2 files which are just put into the host's file system.
+Modern file systems fortunately do not have any problems with 200+ GB files and this way, all the virtual guest harddisks are also covered by RAID.
+
+Hetzner's `installimage` process is controlled by a configuration file. Its (striped-down) version for the system I work on reads like this:
+
+.installimage control file for the physical host
+----
+##  HARD DISK DRIVE(S):
+# Onboard: SAMSUNG HD753LJ
+DRIVE1 /dev/sda
+# Onboard: SAMSUNG HD753LJ
+DRIVE2 /dev/sdb
+
+##  SOFTWARE RAID:
+## activate software RAID?  < 0 | 1 >
+SWRAID 1
+## Choose the level for the software RAID < 0 | 1 | 10 >
+SWRAIDLEVEL 1
+
+##  BOOTLOADER:
+BOOTLOADER grub
+
+##  HOSTNAME:
+HOSTNAME whatever (change this one to your system name, not with domain name)
+
+##  PARTITIONS / FILESYSTEMS: (keep the defaults)
+PART swap swap 4G
+PART /boot ext3 512M
+PART / ext4 all
+
+##  OPERATING SYSTEM IMAGE: (you have selected this earlier in installimage)
+IMAGE /root/.oldroot/nfs/install/../images/Ubuntu-1804-bionic-64-minimal.tar.gz
+----
+
+.Installing the server deletes all data previously on it!
+CAUTION: Just to be sure: If you use installimage (or similar installation routines from other providers) on an existing system, *all data will be deleted* on that system.
+If unsure, check twice that you are on the right system.
+A mistake at this point may be impossible to correct afterwards!
+
+.Install protocol with installimage
+----
+                Hetzner Online GmbH - installimage
+
+  Your server will be installed now, this will take some minutes
+             You can abort at any time with CTRL+C ...
+
+         :  Reading configuration                           done 
+         :  Loading image file variables                    done 
+         :  Loading ubuntu specific functions               done 
+   1/16  :  Deleting partitions                             done 
+   2/16  :  Test partition size                             done 
+   3/16  :  Creating partitions and /etc/fstab              done 
+   4/16  :  Creating software RAID level 1                  done 
+   5/16  :  Formatting partitions
+         :    formatting /dev/md/0 with swap                done 
+         :    formatting /dev/md/1 with ext3                done 
+         :    formatting /dev/md/2 with ext4                done 
+   6/16  :  Mounting partitions                             done 
+   7/16  :  Sync time via ntp                               done 
+         :  Importing public key for image validation       done 
+   8/16  :  Validating image before starting extraction     done 
+   9/16  :  Extracting image (local)                        done 
+  10/16  :  Setting up network config                       done 
+  11/16  :  Executing additional commands
+         :    Setting hostname                              done 
+         :    Generating new SSH keys                       done 
+         :    Generating mdadm config                       done 
+         :    Generating ramdisk                            done 
+         :    Generating ntp config                         done 
+  12/16  :  Setting up miscellaneous files                  done 
+  13/16  :  Configuring authentication
+         :    Fetching SSH keys                             done 
+         :    Disabling root password                       done 
+         :    Disabling SSH root login without password     done 
+         :    Copying SSH keys                              done 
+  14/16  :  Installing bootloader grub                      done 
+  15/16  :  Running some ubuntu specific functions          done 
+  16/16  :  Clearing log files                              done 
+
+                  INSTALLATION COMPLETE
+   You can now reboot and log in to your new system with
+  the same password as you logged in to the rescue system.
+
+root@rescue ~ # reboot
+----
+
+Installing the system this way brings a fresh and rather small Ubuntu system on the disk.
+Note that ssh will complain massively about the changed host key of the system, but that is ok.
+You're now booting the installed system which has another host key than the rescue system you used before.
+
+.First login into the installed host
+----
+dh@workstation:~$ ssh -l root 2a01:4f8:1:3::2
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+[...]
+Offending ECDSA key in /home/dh/.ssh/known_hosts
+  remove with:
+  ssh-keygen -f "/home/dh/.ssh/known_hosts" -R "2a01:4f8:1:3::2"
+ECDSA host key for 2a01:4f8:1:3::2 has changed and you have requested strict checking.
+Host key verification failed.
+dh@workstation:~$ ssh-keygen -f "/home/dh/.ssh/known_hosts" -R "2a01:4f8:1:3::2"
+# Host 2a01:4f8:1:3::2 found
+/home/dh/.ssh/known_hosts updated.
+dh@workstation:~$ ssh -l root 2a01:4f8:1:3::2
+The authenticity of host '2a01:4f8:1:3::2 (2a01:4f8:1:3::2)' can't be established.
+ECDSA key fingerprint is SHA256:z2+iz/3RRC3j6GT8AtAHJYnZvP9kdzw8fW8Aw5GPl0q.
+Are you sure you want to continue connecting (yes/no)? yes
+Warning: Permanently added '2a01:4f8:1:3::2' (ECDSA) to the list of known hosts.
+Welcome to Ubuntu 18.04.1 LTS (GNU/Linux 4.15.0-38-generic x86_64)
+[...]
+root@merlin ~ #
+----
+
+After having booted into it, I had some hours of remarkably degraded performance as the RAID 1 had to initialize the disk duplication completely. Be aware of this, your server will become faster once this is over.
+Use `cat /proc/mdstat` to see what's going on on your harddisks.
+
+.Check RAID array status
+----
+root@merlin ~ # cat /proc/mdstat
+Personalities : [linear] [multipath] [raid0] [raid1] [raid6] [raid5] [raid4] [raid10] 
+md0 : active raid1 sdb1[1] sda1[0]
+      4190208 blocks super 1.2 [2/2] [UU]
+      
+md2 : active raid1 sdb3[1] sda3[0]
+      727722816 blocks super 1.2 [2/2] [UU]
+      [>....................]  resync =  4.0% (29775168/727722816) finish=147.8min speed=78670K/sec
+      bitmap: 6/6 pages [24KB], 65536KB chunk
+
+md1 : active raid1 sdb2[1] sda2[0]
+      523712 blocks super 1.2 [2/2] [UU]
+      
+unused devices: <none>
+----
+
+If you install an e-mail server (or have some external mail service you want to use for system e-mails), you should enable alarming messages if the RAID degrades due to diskfailure.
+A RAID only protects against hardware failures if actually failed hardware is replaced quick enough.
+
+.Test the rescue system
+[NOTE]
+====
+This is a good moment to test whether Hetzner's rescue mechanism works.
+Sometimes, the servers are not correctly configured in the BIOS and do not load the rescue system even if this is requested in the interface:
+
+* Activate the "rescue system boot" in the Robot interface.
+Select your ssh key so that you do not have to enter a password
+* Reboot the machine.
+* Logging in via ssh after 1 to 2 minutes should being up the rescue system.
+Just reboot the machine from the command line - there is no need to rescue now.
+* The system will come up again into the installed system.
+
+If something is wrong here, contact support and let them solve the problem.
+If you make mistakes in the host's network configuration, you will need the rescue mode to sort things out.
+====
+
+
+=== Put /tmp into a ramdisk
+
+One thing which is totally independent from IPv6 and KVM is the `/tmp` directory.
+It contains temporary files.
+I like to put it into a ramdisk.
+Add one line to `/etc/fstab` and replace `/tmp` with the following commands:
+
+.Addition to /etc/fstab to put /tmp into a ramdisk and activate it
+----
+echo "none /tmp tmpfs size=2g 0 0" >> /etc/fstab && \
+mv /tmp /oldtmp && mkdir /tmp && mount /tmp && rm -rf /oldtmp
+----
+
+This setup allows `/tmp` to grow up to 2 GB which is ok if the system has more than, say, 30 GB of memory.
+You can, of course, allow more or less. Note that the memory is only occupied if `/tmp` really stores that much data.
+An empty `/tmp` does not block any memory!
+
+The `mkdir` creates `/tmp` without any special access rights.
+Fortunately, declaring the file system to be `tmpfs` in `/etc/fstab` above makes the access rights `1777` (or `rwxrwxrwt`) - which is exactly what we need for `/tmp`.
+
+You should reboot the system after this change.
+There are changes that wiping `/tmp` this way confuses processes.
+
+.On the reboots
+WARNING: You will read "reboot the system" often during this guide.
+_This is not a joke!_
+We configure very basic system and network settings here and it is crucial that these settings are correct if the system starts up!
+Check this step by step by rebooting and fix any problems before continuing.
+Otherwise, your server will be unreliable - and that's a bad thing!
+
+=== Preparing the network settings of the host
+
+We do now have a freshly installed system.
+Unfortunately, it is not quite ready to serve as a KVM host.
+For this, we first have to configure a network bridge on the system.
+
+I must say that I felt rather uncomfortable with Hetzner's IPv6 approach in the beginning.
+Having only one /64 IPv6 network disallows a routed setup.
+Due to the way how IPv6 works, you _cannot split this network sensibly into smaller ones_.
+I really suggest reading https://etherealmind.com/allocating-64-wasteful-ipv6-not/[Why Allocating a /64 is Not Wasteful and Necessary] and especially https://www.networkworld.com/article/2223248/cisco-subnet/the-logic-of-bad-ipv6-address-management.html[The Logic of Bad IPv6 Address Management] to find out how the semantics of the IPv6 address space differ from the IPv4 one.
+If you have a hoster who gives you a ::/56 or even ::/48 network, you can surely manage your addresses differently. Most probably, you will go with a routed setup.
+
+Since my start on the IPv6 road, I learned however that Hetzner's approach is not _that_ wrong.
+They use the link local `fe80::` address range for gateway definitions https://blogs.infoblox.com/ipv6-coe/fe80-1-is-a-perfectly-valid-ipv6-default-gateway-address/[and this a totally valid approach].
+
+Anyway, we have to use what we get.
+First, enable IPv6 forwarding globally by issuing
+
+----
+sysctl -w net.ipv6.conf.all.forwarding=1
+----
+
+Also enable this setting in `/etc/sysctl.conf` to make it permanent.
+
+Now use `ip a` to get device name and MAC address of the physical network card of the system:
+
+.Example initial network setup on the physical host
+----
+root@merlin ~ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp2s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 00:24:21:21:ac:99 brd ff:ff:ff:ff:ff:ff
+    inet 241.61.86.241/32 scope global enp2s0
+       valid_lft forever preferred_lft forever
+    inet6 2a01:4f8:1:3::2/64 scope global 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::224:21ff:fe21:ac99/64 scope link 
+       valid_lft forever preferred_lft forever
+----
+
+Your network device's name may differ.
+It can be something like `enpXsY` as in this example or `enoX`.
+On all modern Linux distributions, it will begin with `en`, however...
+
+Here the common track for all systems ends.
+In the Linux world, multiple network configuration setups have evolved over time.
+The most common ones are:
+
+* Direct setup in configuration files in `/etc/network`.
+This is old-school networking setup, especially when combined with a System-V-initialisation process.
+I do _not_ cover this here but you find a plethora of installation guides in the internet for this.
+* Systemd-based configuration with files in `/etc/systemd/network`.
+This is how many modern distributions handle system start and network setup these days.
+Ubuntu did it until 17.04, Hetzner's Ubuntu did it longer.
+I cover this two sections further.
+* Netplan with a configuration in `/etc/netplan`.
+This kind of "meta-configuration" is used by Ubuntu since 17.10 and by Hetzner since November 2018 for 18.04 and 18.10.
+I describe the needed changes in the following section.
+
+
+==== Ubuntu 18.04 and later with Netplan
+
+Ubuntu 18.04 comes with a relatively new tool named https://netplan.io[Netplan] to configure the network.
+Since about November 2018, Hetzner uses this setup in their install process.
+Note that earlier Ubuntu installations are provided with systemd-networkd-based setup described below.
+
+Netplan uses configuration files with YAML syntax.
+In most cases, there is only one file: `/etc/netplan/01-netcfg.yaml`.
+For freshly installed Hetzner servers, it looks somehow like this:
+
+.Netplan network configuration on a Hetzner server
+----
+root@merlin /etc/netplan # cat 01-netcfg.yaml 
+### Hetzner Online GmbH installimage
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp2s0:
+      addresses:
+        - 241.61.86.241/32
+        - 2a01:4f8:1:3::2/64
+      routes:
+        - on-link: true
+          to: 0.0.0.0/0
+          via: 241.61.86.225
+      gateway6: fe80::1
+----
+      
+Change it like this:
+
+.Netplan configuration as needed for the physical host
+----
+root@merlin ~ # cat /etc/netplan/01-netcfg.yaml 
+### Hetzner Online GmbH installimage
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp2s0:
+      dhcp4: false
+      dhcp6: false
+  bridges:
+    br0:
+      accept-ra: false
+      macaddress: 00:24:21:21:ac:99
+      interfaces:
+        - enp2s0
+      addresses:
+        - 241.61.86.241/32
+        - 2a01:4f8:1:3::2/64
+      routes:
+        - on-link: true
+          to: 0.0.0.0/0
+          via: 241.61.86.225
+      gateway6: fe80::1
+----
+      
+You disable both DHCP protocols on the physical device and attach it to the newly defined bridge device `br0`.
+That bridge gets all definitions from the physical device.
+*It also gets the MAC address of the physical device*, otherwise Hetzner's network will not route any packets to it.
+
+Note that you also disable any IPv6 auto-configuration on the `br0` device by adding `accept-ra: false` into its configuration.
+We'll setup the routing advertisement daemon lateron for the virtual machines, but it should not interact with the physical host.
+
+Netplan has the very nice capability to apply a new configuration to a running system and roll it back if something goes wrong.
+Just type `netplan try`.
+If the countdown counts down (some stalled seconds at the beginning are allowed), just hit `Enter` and make the change permanent.
+Otherwise, wait for two minutes and Netplan will restore the old configuration so that you should be able to login again and fix the problem without further ado.
+I suggest to finish this on success with a complete reboot to be _really_ sure that the new configuration is applied on system startup.
+
+After a reboot, the network device list should look like this:
+
+.Network devices with changed Netplan configuration
+----
+root@merlin ~ # ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp2s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel master br0 state UP group default qlen 1000
+    link/ether 00:24:21:21:ac:99 brd ff:ff:ff:ff:ff:ff
+3: br0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 00:24:21:21:ac:99 brd ff:ff:ff:ff:ff:ff
+    inet 241.61.86.241/32 scope global br0
+       valid_lft forever preferred_lft forever
+    inet6 2a01:4f8:1:3::2/64 scope global 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::224:21ff:fe21:ac99/64 scope link 
+       valid_lft forever preferred_lft forever
+----
+       
+Note that the physical device `enp2s0` and the bridge `br0` have the same MAC address.
+_This is intentional!_
+
+You should test now that you can login to the system through both IPv6 and IPv4 protocol, use `ssh -6 <hostname>` and `ssh -4 <hostname>` to enforce the IP protocol version.
+
+
+==== Ubuntu 18.04 and other systems with systemd-networkd
+
+.This section is not updated any more
+CAUTION: This section is not updated any more. Actually, Ubuntu gave up on direct systemd configuration.
+
+Until October 2018, Hetzner used a systemd-networkd-based setup on Ubuntu, even with 18.04.
+If you have such a system, you get the same result in a different way.
+https://major.io/2015/03/26/creating-a-bridge-for-virtual-machines-using-systemd-networkd/[Creating a bridge for virtual machines using systemd-networkd] explains the basics nicely.
+
+With this system, go to `/etc/systemd/network` and define a bridge device in file `19-br0.netdev`:
+
+.Bridge configuration with systemd-networkd in /etc/systemd/network/19-br0.netdev
+----
+[NetDev]
+Name=br0
+Kind=bridge
+MACAddress=<MAC address of the physical network card of the host>
+
+[Bridge]
+STP=true
+----
+
+It is extremly important to define the MAC address, or Hetzner will not route traffic to the system.
+STP seems not mandatory, does not hurt either. I kept it in.
+
+Then, assign bridge to physical device in `20-br0-bind.network`:
+
+.Bridge assignment in 20-br0-bind.network
+----
+[Match]
+Name=eno1
+
+[Network]
+Bridge=br0
+----
+
+Now copy the original file created by Hetzner (here: `10-eno1.network`) to `21-br0-conf.network` and replace the matching name from the physical device to the bridge.
+In fact, you only replace the `eno1` (or whatever you network device's name is) with `br0`.
+You also add `IPv6AcceptRA=no` to prevent the physical host's network being influenced from the SLAAC messages of `radvd` which is installed later:
+
+.Changed main network configuration
+----
+[Match]
+Name=br0
+
+[Network]
+Address=<IPv6 address assigned by Hetzner, do not change>
+Gateway=fe80::1  // This is always the IPv6 gateway in Hetzner's network setup
+Gateway=<IPv4 gateway assigned by Hetzner, do not change>
+IPv6AcceptRA=no
+
+[Address]
+Address=<IPv4 address of the system assigned by Hetzner, do not change>
+Peer=<IPv4 peer assigned by Hetzner, do not change>
+----
+
+Rename the original file `10-eno1.network` to something _not_ detected by systemd, e.g. `10-eno1.networkNO`.
+_Keep it around in case something goes wrong._
+
+After these changes, the physical device has not any networks attached.
+This is important so that the bridge can grab it on initialization.
+Let's see whether everything works and reboot the system.
+
+If something goes wrong: Boot into rescue system, mount partition, rename `10-eno1.networkNO` back into original name ending in `.network`.
+Reboot again.
+Investigate. Repeat until it works...
+
+
+=== Change IPv6 address
+
+You might think about changing the IPv6 address of the physical host.
+The Hetzner provider configures them always having `0:0:0:2` as address.
+While there is nothing wrong with that, giving the host a random address makes the whole installation a bit less vulnerable to brute-force attacks.
+
+Fortunately, changing the address is really simple.
+In the *Netplan-based setup*, it is in `/etc/netplan/01-netcfg.yaml`. Look for the `addresses` of the `br0` device:
+
+----
+network:
+[...]
+  bridges:
+    br0:
+[...]
+      addresses:
+        - 2a01:4f8:1:3::2/64
+----
+    
+Change it's host part (the lower 64 bits) to more or less whatever you like
+
+----
+        - 2a01:4f8:1:3:6745:a24b:cc39:9d1/64
+----
+
+If you work *with systemd-networkd*, the network configuration is in `/etc/systemd/network/21-br0-conf.network` if you followed this guide:
+
+----
+[Network]
+Address=2a01:4f8:1:3::2/64
+----
+
+Change it to
+
+----
+[Network]
+Address=2a01:4f8:1:3:6745:a24b:cc39:9d1/64
+----
+
+You can also _add_ and not replace the additional address.
+Then, your server can be accessed through _both_ addresses.
+While it is absolutely no problem to have multiple IPv6 addresses on the same device, it can make configuration of services more difficult as the correct address for outgoing messages has to be selected correctly.
+I would suggest _not_ to do this.
+Stay with one address.
+
+Use `netplan try` or `systemctl restart systemd-networkd` to apply the new settings.
+Note that if you are connected via IPv6, your connection will be interrupted and you have to reconnect.
+If you are connected via IPv4 (e.g. by `ssh <IPv4-address>` or `ssh -4 <hostname>`), your connection should survive.
+systemd-networkd, however, might need several seconds to sort everything out.
+
+If everything works, add a reboot.
+In theory, restarting the network configuration should be sufficient, but my system sometimes behaved strangely after that.
+
+ssh to the _new_ address should now work.
+If it doesn't and your are locked out, again use the rescue system to sort it out.
+
+Now is the time to add the physical host to the DNS:
+
+* Add an `AAAA` record in the domain the system should be reachable in.
+
+* Add a `PTR` record in the hoster's reversal IP entries.
+If there is already an entry for the former address, you can remove it by simply wiping out the server name and pressing "Enter".
+
+* While you're at it, also add the `A` record and the `PTR` record for the IPv4 address of the Host.
+
+.Keep DNS time-to-live short!
+TIP: I strongly suggest that you set the TTL for all DNS entries as short as possible during the setup, something between 2 and 5 minutes.
+If you make a mistake and you have a TTL of multiple hours or even a day, you may have serious issues with the name service as long as the TTL of the wrong entries is not invalid everywhere.
+
+.The rescue system IP address
+IMPORTANT: If you ever have to reboot your server into Hetzner's rescue system, keep in mind that it will get its _original_ IPv6 address ending in `::2`.
+You will not be able to access it through its DNS name.
+You might want to add a DNS entry for `<servername>-rescue.example.org` for such cases.
+Of course, you have to remember that, too...
+
+
+=== Ensure correct source MAC address
+
+Our virtual machines will have their own MAC addresses.
+Otherwise, the IPv6 auto configuration would not work.
+Unfortunately, these MAC addresses will also leak through the bridge into Hetzner's network and that might lead to trouble as the provider does only accept the actual assigned MAC address of the main server as valid.
+
+To prevent such problems perform MAC address rewriting using the `ebtables` command.
+You might need to install it using `apt install ebtables` first.
+Then use:
+
+.ebtables rule to stop virtual MAC addresses from leaking outside
+----
+ebtables -t nat -A POSTROUTING -j snat --to-src <MAC address of the physical network card of the host>
+----
+
+I've added this to `/etc/rc.local`.
+On a default installation of Ubuntu 20.04 (or 18.04), this file does not exist.
+If you create it, make it look like this:
+
+.Example /etc/rc.local
+----
+#!/bin/bash
+
+# force source MAC address of all packets to the official address of the physical server
+ebtables -t nat -A POSTROUTING -j snat --to-src 00:24:21:21:ac:99
+
+exit 0
+----
+
+*Replace the address in the example with your actual physical MAC address!*
+Also, make the file executable with `chmod +x /etc/rc.local`.
+
+"The internet" claims that you need to add other files to systemd for `/etc/rc.local` being evaluated in Ubuntu.
+At least for me this was not needed, it "just worked".
+Check whether the rule has been added:
+
+.Output of ebtables with required MAC rewriting
+----
+root@merlin ~ # ebtables -t nat -L
+Bridge table: nat
+
+Bridge chain: PREROUTING, entries: 0, policy: ACCEPT
+
+Bridge chain: OUTPUT, entries: 0, policy: ACCEPT
+
+Bridge chain: POSTROUTING, entries: 1, policy: ACCEPT
+-j snat --to-src 00:24:21:21:ac:99 --snat-target ACCEPT
+root@merlin ~ #
+----
+
+Reboot the systems once more to check if the rule survives a reboot.
+
+At this stage, lean back for a moment!
+The difficult part is done.
+You have the network setup of your KVM host up and running.
+The rest is much easier and will not potentially kill network access to system.
+Also, the stuff coming now is much less provider-specific.
+While the initial network setup might work considerably different with another hosting provider, chances are good that the following steps are the same regardsless of where you have placed your host.

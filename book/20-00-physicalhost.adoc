@@ -1,0 +1,21 @@
+= The physical host
+
+// NO_LIBRARY
+
+The first thing to start a virtualized server setup is to prepare the physical host.
+Sometimes it's also called "hypervisor" or "domain zero".
+It all means the same: It is the actual hardware ("bare metal") with an operating system on it which hosts all the virtual machines to come.
+I'll stick with the term "physical host" in this document when I reference this installation.
+
+The operating system of the physical host can be totally different from the operating systems on the virtual machines.
+It can be a specialized system like VMWare's ESXi or an extremly shrunken Linux or BSD system.
+The setup described here, however, is based on a stock Ubuntu installation for the physical host.
+It is a very broadly used system with tons of descriptions for different configuration.
+Chances are good that you find solutions for specific problems of your installation "in the internet" rather easily.
+
+The physical host has to cope with the specific network infrastructure it is installed in.
+Depending on this external setup, configuration can be quite different between installations.
+
+include::20-20-onenetwork.adoc[]
+
+include::20-50-kvm.adoc[]

@@ -1,0 +1,10 @@
+= The virtual machines
+
+After the physical host is up and running, we can install the virtual machines.
+They will carry the services which this machine actually will be used for.
+Thie guide is not so much about virtualized environments in general but more about IPv6-first or IPv6-only setups.
+However, we'll also look at the general virtual machine concepts.
+
+include::25-10-overview.adoc[]
+
+include::25-30-systems.adoc[]

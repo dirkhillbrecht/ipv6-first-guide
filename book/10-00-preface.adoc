@@ -1,0 +1,88 @@
+== Preface
+
+This is a book about setting up a Linux server and a number of services on it.
+It describes a so-called "virtualized setup".
+That is, the physical machine on which everything runs is separated into a number of "virtual machines" which run completely independent instances of operating systems.
+The virtual machines are held together by the operating system on the physical host - sometimes referenced as "hypervisor".
+
+This setup is not totally unusual.
+In fact, these days it's the normal way of working with many-core-multi-gigabyte systems available for purchase or rent.
+
+There is, however, still a remarkable shortage of descriptions how to setup such a system based on IPv6 as primary protocol.
+Even though the classic IPv4 address pool is drought for several years now, setups continue to describe how to work with one public IPv4 address for the host system and a network of private IPv4 addresses for the virtual machines.
+
+The setup described here works genuinely with IPv6 as communication protocol.
+The most important advantage is that all virtual machines can be accessed by official IP addresses directly without any further ado.
+Of course, this only works if the client also has IPv6 connectivity which is finally the case for more and more systems these days.
+
+We also show how IPv6 and IPv4 get interconnected in this setup:
+How can an IPv6-only virtual machine access an IPv4-only server?
+How can IPv4-only clients access services on the IPv6-only virtual machines?
+Are there services which definitely need an IPv4 address on a virtual host (spoiler: yes) and how do we attach them?
+
+
+// === IPv6 - why and how
+
+=== Genesis - Why this document exists
+
+After having administrated Unix and Linux systems since the 1990ies, I've rented my first real root server for myself only in 2016.
+While that machine worked and served things quite reliably, I felt it aging pretty fast.
+It was an Ubuntu 16.04 system, it had only 4 GB of RAM and a quite outdated Athlon64 processor.
+
+Due to these parameters it was not possible to run virtualized setups  - which I wanted to do to seperate services.
+E.g. that machine has a complete e-mail server setup which I intended to use for my private e-mail but still hesitated to activate as it was rather complex and "manually setup".
+I followed an instruction guide on the internet which even its author said is outdated only two years later.
+
+There were other shortcomings like a less-than-optimal Let's-encrypt setup.
+Let's encrypt started almost at the same time as my server installation and there have been quite some optimisations since then.
+
+All in all, my setup was aging, it was not sufficient for much more stuff on it and in the meantime, you got far more capable hardware for not so much more money.
+
+So, in 2018 I decided to start "from scratch" with the system design.
+The first and most important design decision was about IP connectivity.
+IPv4 had run out of address space since more than five years then.
+IPv6 has been available for a decade or so.
+I wanted to do it in a modern way:
+
+* I assume to have only one IPv4 address but a sufficiently large IPv6 network routed to the rented server.
+
+* I build the system in a way that all "real" services run in virtual machines managed by Linux' KVM system.
+
+* The physical host gets the IPv4 address.
+
+* All virtual machines get _only_ IPv6 addresses. No offical IPv4, not even a dual stack with private IPv4 and masquerading. Only IPv6.
+
+* Virtual machines can access IPv4-only services in the internet through a NAT64/DNS64 gateway on the host.
+
+* Services on the virtual machines are only generally available from IPv6 addresses.
+
+* To serve incoming IPv4 requests, application proxys on the physical host forward traffic to the actual service handlers on a virtual machine if needed.
+
+* If for any reason a service on a virtual machine absolutely needs its own direct IPv4 connectivity, it is added "on top" of the setup.
+
+Implementing this scheme took me about a week.
+I wrote all steps down and published a series of blog articles.
+As systems evolve and interest remained, I continued to update the articles.
+Eventually, I came to the conclusion that this scheme of updating was not flexible enough.
+So, I decided to rewrite the articles (and some unpublished articles with further explanations) into an Asciidoc document and publish it on github.
+
+And here we are! Have fun reading it and setting up your own, modern, IPv6-first setup.
+
+.About IP addresses
+NOTE: IP addresses in this guide are made up and sometimes scrambled like `1.2.X.Y` or `1234:5:X:Y::abcd`. `X` and `Y` actually have to be numbers, of course...
+
+=== Maturity of configurations
+
+This guide describes several configurations with different level of maturity. This is how the maturity is *as of July 2020*:
+
+* Physical host
+** Hetzner Online: Almost all systems configured this way are located at Hetzner's data center.
+Ubuntu 20.04:::: Guide has been in use for several installations and all seems to work fine. Usable for production systems as long as no router advertisements are used.
+Ubuntu 18.04:::: In usage for production systems since almost two years. Flawless. Use this for setups which "just have to run". Use this if in doubt what to use.
+Ubuntu 16.04:::: Still works but should not be used any more. Support will drop in Spring 2021.
+** Local network: I have also installed one system using this setup in a local network.
+Ubuntu 18.04:::: Works. Also the only one I've tried.
+* Virtual machines
+Ubuntu 20.04::: Works out of the box. Especially, here are not problems with IPv6 router advertisements. Strange world...
+Ubuntu 18.04::: Works out of the box.
+Windows 10::: Works out of the box.

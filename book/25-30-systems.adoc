@@ -1,0 +1,57 @@
+== Operating-systems in the virtual machines
+
+You can install any operating system which is capable of running in a virtualized setup. Of course, it _must_ be able to use IPv6 and it _should_ be able to auto-configure its network settings via SLAAC. Fortunately, all modern operating systems support such setups nowadays.
+
+=== Ubuntu 20.04
+
+We're now at a stage where you can install any operating system which is installable in KVM virtual machines. I give some advises for the Ubuntu 20.04 network installer:
+
+* Install by simply pressing the "Install" button. I never needed any additional kernel parameters.
+* Select correct keyboard or it will drive you nuts.
+* Network autodetection will idle around when looking for the non-existing DHCP server. Keep calm. Apart from that, it will simply setup everything correctly.
+* Enter the hostname, preferrably the same as the name of the virtual machine to keep it simple...
+* Check whether you provider has their own mirror for the installation server. Hetzner has, therefore you can save download time:
+** Go to top of mirror list and press `enter information manually`
+** For Hetzner: `mirror.hetzner.de`. This server also works also with IPv6. But even IPv4 servers would be possible due to our NAT64/DNS64 setup.
+** Set directory for the Hetzner server to `/ubuntu/packages/`
+* You do not need a HTTP proxy.
+* Install should start.
+* I suggest to not partition the virtual hard disk in any way. It is not needed.
+* Everything else is as usual. In the software selection, you should at least select the "OpenSSH server" so that you can log into the system after installation.
+
+As this is Ubuntu 20.04, this machine uses netplan for network configuration. It has a very simple definition file in `/etc/netplan/01-netcfg.yaml`:
+
+.Netplan configuration in a Ubuntu 20.04 virtual machine
+----
+# This file describes the network interfaces available on your system
+# For more information, see netplan(5).
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens3:
+      dhcp6: yes
+----
+
+Netplan summarizes router advertisement in the "dhcp6" statement. You do not need to change anything here.
+
+Note that after (re-)booting the virtual machine, it may take some seconds until it has configured its network interface. Once it has done so, everything should work without problems.
+
+=== Ubuntu 18.04
+
+Ubuntu 18.04 is installed exactly the same way as Ubuntu 20.04.
+
+=== Ubuntu 16.04
+
+Ubuntu 16.04 is installed almost exactly the same way as Ubuntu 20.04. The only difference is that Ubuntu 16.04 still uses `systemd-networkd` for network configuration.
+Therefore, its network settings are located at a different place and also differ syntactically.
+However, as with the more modern cousins, you do not have to change anything manually due to the autoconfiguration.
+
+=== Windows 10
+
+Windows "just works" when installed in an IPv6-only virtual machine.
+It takes all the advertisements from `radvd` and configures its network appropriately.
+The result is a Windows which has no IPv4 network aprt from the auto-configured one.
+
+.Windows 10 with IPv6-only connectivity
+image::pics/Win10-IPv6-only.png[align="center",width=300%,scalewidth=10cm]

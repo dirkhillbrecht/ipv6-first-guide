@@ -1,0 +1,272 @@
+== Cryptpad instance
+
+Cryptpad is a browser-based collaborative document management which stores all information on the server encrypted.
+So, even administrators of the server system cannot read the information unless they have a key for access.
+
+We install a complete self-contained cryptpad server on a virtual machine.
+It is located in one dedicated user account and proxied with an Apache server which takes care for the SSL transport encryption.
+
+In our IPv6-first setup, there is one special problem: Cryptpad uses an additional HTTP/Websocket connection which must be forwarded.
+Therefore, we modify the setup a bit:
+
+* Apache is a proxy-only on both the physical host and the virtual machine.
+
+* The actual cryptpad service runs on port 3000.
+
+* Access to the "raw" cryptpad is restricted to the local network only.
+
+* The forwarding Apache on the physical host does not forward to the Apache on the virtual machine, but directly to the cryptpad service.
+
+
+=== Setup firewall and service name
+
+To restrict access to port 3000, we need a firewall.
+Ubuntu comes with `ufw` which does the job.
+Install it with `apt install ufw`.
+Then perform the following commands for the basic setup:
+
+.Basic setup of ufw
+----
+ufw allow from 2a01:4f8:1:2::/64 to any port 3000  # Local IPv6 network
+ufw allow OpenSSH  # very important, otherwise you are locked out
+ufw allow "Apache Full"  # meta-rule for the Apache on the virtual machine
+----
+
+If you have other services on the virtual machine, add their respective ports with more `allow` commands.
+You can get the list of installed application packages with `ufw app list`.
+Note that you do not need a local Postfix instance for cryptpad.
+
+ufw stores the actual firewall rules in files below `/etc/ufw`.
+The app rules applied above get stored in `/etc/ufw/user6.rules`.
+You should not temper that file, stay with `ufw` commands for configuration.
+If everything is in place, change `/etc/ufw/ufw.conf` and set
+
+.Enable ufw in /etc/ufw/ufw.conf
+----
+ENABLE=yes
+----
+
+To check that everything works as expected, perform `ip6tables -L` which should be empty now.
+Start ufw with `systemctl restart ufw` and run `ip6tables -L` again.
+Now you should see a rather lengthy list of rule chains and rules, among them the rules regarding port 3000 you gave above.
+
+Test that you can reach the Apache server on the system.
+
+You should now add the DNS name of your cryptpad instance.
+Remember what we said about system names and service names:
+The virtual machine Cryptpad will run on is _not_ accessible via IPv4 directly.
+Therefore, you need a proxy on the IPv4-accessible physical host of your installation.
+As a result, the DNS entries for accessing your Cryptpad instance will point to _different_ servers in their `A` and `AAAA` records.
+To avoid confusion, use the Cryptpad service entries only for accessing the _service_ and use the name of the virtual machine for _maintenance_.
+
+This said, add the appropriate entries to your DNS records. We will assume `cryptpad.example.com` as name for the Cryptpad service in this guide.
+
+
+=== Install cryptpad
+
+Cryptpad is open-source software.
+Their producers offer storage space on their own cryptpad servers as business model.
+Therefore, they are not overly eager to promote independent installations.
+Nevertheless, it is no problem to run and maintain a self-hosted installation of the software as long as you have some idea about what you are doing there.
+
+Start with creating a user "cryptpad" with `adduser --disabled-password cryptpad`.
+Add your key in its `.ssh/authorized_keys` file so that you can log into the account.
+
+As user `cryptpad`, you install some software packages needed by Cryptpad:
+
+* First is `nvm`, follow the instructions on https://github.com/nvm-sh/nvm[].
+
+* Log out and in again to have you user-local `nvm` accessible.
+
+* Now install Node.js.
+In late 2018, Cryptpad used version 6.6.0, so the command is
+
+.Install Node.js 6.6.0
+----
+nvm install 6.6.0
+----
+
+This installs the Node package manager `npm` and sets paths correctly.
+Check it with
+
+.Path to npm
+----
+$ which npm
+/home/cryptpad/.nvm/versions/node/v6.6.0/bin/npm
+----
+
+* Finally you need `bower`. Install it with
+
+.Install bower
+----
+npm install -g bower
+----
+
+Now you are ready to actually install Cryptpad.
+
+Stay as user `cryptpad` and start by obtaining the software:
+
+.Download Cryptpad
+----
+$ cd $HOME
+$ git clone https://github.com/xwiki-labs/cryptpad.git cryptpad
+----
+
+This installs Cryptpad right from its Github repositories.
+It's the default way of installing an independent Cryptpad instance.
+Installing this way has the big advantage that updating to a newer Cryptpad version is a simple `git pull`, followed by the instructions in the version announcement.
+
+Now you perform the basic setup:
+
+.Basic Cryptpad setup
+----
+$ cd $HOME/cryptpad
+$ npm install
+$ bower install
+----
+
+These are also the routine steps after an update.
+Note that especially the `npm install` step seems to download "half of the internet".
+This is expected behaviour.
+Cryptpad comes from the Javascript/Node.js sphere and those folks love to use a plethora of library packages with themselves use another plethora of library packages.
+Fortunately, subsequent updates will only touch a subset of these libraries...
+
+After installation comes configuration:
+
+.Configuration of Cryptpad
+----
+$ cd $HOME/cryptpad/config
+$ cp config.example.js config.js
+----
+
+Now you edit `config.js`.
+It's a JSON file and there are three important changes to be performed:
+
+.Important changes in Cryptpad configuration
+----
+var _domain = 'https://cryptpad.example.com/';
+[...]
+httpAddress: '<public IPv6 address as in "ip -6 a" of the virtual machine>',
+adminEmail: false,
+----
+
+We configure cryptpad itself in a way that it uses it's domain name in the `_domain` variable.
+`httpAddress` is the actual address cryptpad starts its own HTTP server on.
+To be sure that this happens on the correct interface, we use the actual IPv6 address here.
+
+After this step, Cryptpad is configured completely but not yet started.
+We come back to this a moment later.
+
+As a final step, you should remove the `$HOME/cryptpad/customize` subdirectory if you do not really need it.
+It will not be updated during updates and might carry outdated information after updates.
+
+=== Integrate Cryptpad into systemd
+
+Usually, Cryptpad is a service which runs permanently.
+Therefore, it should be started on system startup.
+For `systemd`-controlled servers as any modern Debian or Ubuntu installation, add a systemd service unit file:
+
+.systemd service unit in /home/cryptpad/cryptpad.service
+----
+[Unit]
+Description=CryptPad service
+
+[Service]
+ExecStart=/home/cryptpad/.nvm/versions/node/v6.6.0/bin/node /home/cryptpad/cryptpad/server.js
+WorkingDirectory=/home/cryptpad/cryptpad
+Restart=always
+User=cryptpad
+
+[Install]
+WantedBy=multi-user.target
+----
+
+Symlink this file into `/etc/systemd/system`:
+
+----
+ln -s /home/cryptpad/cryptpad.service /etc/systemd/system
+----
+
+Now you can start the cryptpad service:
+
+----
+# systemctl start cryptpad
+# systemctl enable cryptpad
+----
+
+The cryptpad server should now be reachable on the virtual machine _and_ on the physical host on its port 3000.
+Test it with `curl http://cryptpad.example.com:3000/` on both systems.
+From any other computer, the service _must not_ be reachable due to the firewall blocking the access.
+Do test this, also!
+
+
+=== Apache on virtual machine
+
+To make Cryptpad accessible from the outside, we configure an Apache proxy.
+For Cryptpad, it needs to proxy websockets, so (as `root`) run the command `a2enmod proxy_wstunnel`.
+
+Then, the Apache configuration is rather straight forward:
+
+.Apache configuration on the virtual machine in /etc/apache2/sites-available/cryptpad.conf
+----
+<VirtualHost *:80>
+    ServerAdmin myname@example.com
+    ServerName cryptpad.example.com
+
+    # Rewrite everything to SSL
+    RewriteEngine on
+    RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,QSA,R=permanent]
+</VirtualHost>
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerAdmin myname@example.com
+    ServerName cryptpad.example.com
+
+    # SSL certificate stuff
+    SSLCertificateFile /etc/letsencrypt/live/cryptpad.example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/cryptpad.example.com/privkey.pem
+    Include /etc/letsencrypt/options-ssl-apache.conf
+
+    # Proxy settings, "2a01:4f8:1:2:5054:ff:fe12:3456" is the IPv6 address of the virtual machine
+    ProxyPass /cryptpad_websocket  ws://[2a01:4f8:1:2:5054:ff:fe12:3456]:3000/cryptpad_websocket
+    ProxyPreserveHost  On
+    ProxyPass /        http://[2a01:4f8:1:2:5054:ff:fe12:3456]:3000/
+    ProxyPassReverse / http://[2a01:4f8:1:2:5054:ff:fe12:3456]:3000/
+
+    # Logging
+    ErrorLog ${APACHE_LOG_DIR}/cryptpad-error.log
+    CustomLog ${APACHE_LOG_DIR}/cryptpad-access.log combined
+</VirtualHost>
+</IfModule>
+----
+
+After that, activate the virtual host:
+
+----
+a2ensite cryptpad
+systemctl reload apache2
+----
+
+If everything comes up without errors, you can access your Cryptpad from any IPv6-connected computer.
+Check that loading a pad actually works, otherwise there is a problem with the forwarding rule for the websocket.
+
+
+=== Apache on physical host
+
+The Cryptpad instance is not yet accessible from IPv4 clients.
+For this, you need another Apache proxy on the physical host.
+The very nice thing here is that it can be configured _exactly_ as its compaignon on the virtual machine!
+So, on the physical host as `root` do this:
+
+* Enable the websocket proxy module with `a2enmod proxy_wstunnel`.
+* Copy `/etc/apache2/sites-available/cryptpad.conf` from the virtual machine to the physical host at the same location.
+* Take care that the SSL keys are located at the correct position.
+* Enable the host with `a2ensite cryptpad`.
+* Activate the configuration with `systemctl reload apache2`.
+
+Now, cryptpad can also be reached from any IPv4-only hosts.
+
+Note that on the physical host, you forward to port 3000 on the virtual machine.
+This is the reason why the port must be reachable from the physical host.
+Port 3000 on the physical host is totally unaffected from all of this and in fact, you could just install another, independent service there without breaking your Cryptpad on the virtual machine.

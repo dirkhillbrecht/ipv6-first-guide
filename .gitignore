@@ -1,0 +1,4 @@
+.asciidoctor/
+*.svg
+.*.swp
+*.pdf

@@ -1,0 +1,39 @@
+= IPv6-first network configurations with Linux and KVM
+:Author: Dirk Hillbrecht
+:Date: 2020-08-09
+:pdf-page-size: A4
+:pdf-style: ../lib/pdf-theme.yml
+:lang: en
+:icons: font
+:sectnums:
+:toc:
+:xrefstyle: short
+:doctype: book
+
+////
+
+THIS IS AN ASCIIDOC DOCUMENT!
+
+Create HTML with
+
+asciidoctor -r asciidoctor-diagram <docname>.adoc
+
+Create a PDF version with
+
+asciidoctor-pdf -r asciidoctor-diagram <docname>.adoc
+
+////
+
+include::05-00-history.adoc[]
+
+include::10-00-preface.adoc[]
+
+include::20-00-physicalhost.adoc[]
+
+include::25-00-virtual.adoc[]
+
+include::40-00-services.adoc[]
+
+include::50-00-special.adoc[]
+
+include::95-00-epilogue.adoc[]

@@ -1,0 +1,141 @@
+== Static routes between servers
+
+Sometimes, some hosts are interconnected directly additional to the usual link to the network's general infrastructure.
+E.g. a database cluster could get such an additional link between the clustered systems.
+This way, traffic between the machines is undisturbed by any general traffic and additionally strictly kept in the cluster.
+
+.Routing with an additional link
+[graphviz,format="svg",align="center",frame="none"]
+....
+digraph G {
+border="0"
+graph [rankdir=TB]
+
+local [label="Local switch"]
+phyA [label="Physical Host A\n2001:db8:a:a::/64"]
+phyB [label="Physical Host B\n2001:db8:b:b::/64"]
+phyC [label="Physical Host C\n2001:db8:c:c::/64"]
+hoster [label="General infrastructure"]
+internet [label="The internet"]
+
+{rank=min;local}
+{rank=same;phyA,phyB,phyC}
+
+phyA -> local [label="eth1\nfe80::ff:fee1:a"]
+phyB -> local [label="eth1\nfe80::ff:fee1:b"]
+phyC -> local [label="eth1\nfe80::ff:fee1:c"]
+phyA -> hoster [label="eth0\nfe80::ff:fee0:c"]
+phyB -> hoster [label="eth0\nfe80::ff:fee0:c"]
+phyC -> hoster [label="eth0\nfe80::ff:fee0:c"]
+
+hoster -> internet
+}
+....
+
+With IPv6, such a scheme is extremely simple to setup.
+Let's assume we have those three servers `phyA`, `phyB`, and `phyC`.
+Every host has an assigned /64 network and two network cards:
+`eth0` is connected to the "general infrastructure" and used for accessing the internet, `eth1` is connected to some local switch which interconnects all the systems.
+
+If you set up everything as written in this guide, you will have `eth0` on the hosts as default path for the packets.
+And as the servers do not know better, they will connect to each other via this path.
+The local switch is not used.
+
+To use it, you must add a _static route_ to the setup.
+E.g. `phyA` must know: "To connect to anything in the `2001:db8:b:b::/64` or in the `2001:db8:c:c::/64` network, route the packet via `eth1`."
+With IPv6, you define such routings via link-local addresses and devices.
+
+Let's start with the address. https://blog.zivaro.com/need-know-link-local-ipv6-addresses["Link-local" addresses] are an IPv6 special which has no counterpart in the IPv4 world.
+Actually, each IPv6-capable network link automatically assign itself a world-wide unique "link local unicast" address.
+It starts with `fe8` to `feb`. In our example, the `eth1` network card in `phyB` got the link-local address `fe80::ff:fee1:b`.
+
+
+This address cannot be used to access the server from the outside as link-local addresses are never routed between networks.
+However, it _can_ be target of a local routing, e.g. on an additional local switch like in this example.
+It is possible and sensible to say: "The routing target network `2001:db8:b:b::/64` can be reached via `fe80::ff:fee1:b`."
+
+If you configure such a routing, however, the routing source must know how to reach _that_ via address.
+The network address does not help as _all_ network cards in the routing source have an `fe[8-b]` network address.
+The routing can only be used if it is additionally bound to a network card.
+
+And this is precisely what we do: On `phyA` (and `phyC`) we configure: "The routing target network `2001:db8:b:b::/64` can be reached via `fe80::ff:fee1:b` on device `eth1`."
+
+=== Manual configuration with Netplan
+
+In Netplan, this configuration is very simple to archieve:
+
+.Netplan configuration with static route on phyA (and phyC)
+----
+network:
+  [...]
+  ethernets:
+    [...]
+    eth1:
+      dhcp6: no
+      routes:
+        - to: 2001:db8:b:b::/64
+          via: fe80:ff:fee1:b
+----
+
+It is important that `eth1` is mentioned at all in the configuration, otherwise it will not be brought up by the kernel.
+Then, the route is simply added. `netplan try` or `netplan apply` activates it and of course it will be setup again after a reboot.
+
+The same way, you configure `phyB`, but with the network and link-local via address of `phyA`:
+
+.Netplan configuration with static route on phyB (and phyC)
+----
+network:
+  [...]
+  ethernets:
+    [...]
+    eth1:
+      dhcp6: no
+      routes:
+        - to: 2001:db8:a:a::/64
+          via: fe80:ff:fee1:a
+----
+
+=== Auto-configuration with radvd
+
+.This does not work with Ubuntu 20.04
+CAUTION: The systemd-networkd included into Ubuntu 20.04, which is behind the Netplan-based network configuration, does not handle the advertisement messages correctly and drops the routes once their first advertisement expires or simply does not receive them in the first place. It's a mess...
+
+Configuring the additional static routes on all systems explicitly can become rather tedious.
+Fortunately, if you have `radvd` running on the system - as we have on our physical hosts - it can also do this job.
+The idea is that each system which is connected to the local switch just announces itself as gateway to its network.
+On `phyA`, the according definition looks like this:
+
+.radvd configuration for eth1 on phyA
+----
+interface eth1 {
+  AdvSendAdvert on;
+  AdvDefaultLifetime 0;
+  route 2001:db8:a:a::/64 {
+    AdvRouteLifetime infinity;
+  };
+};
+----
+
+With `AdvSendAdvert` we enable information advertisement generally.
+`AdvDefaultLifetime 0` declares that this system is _not_ a default router - which is important as it only can handle packages for its own network.
+Finally, `route` declares the route to the network of this system.
+`AdvRouteLifetime infinity` declares this route to be valid forever.
+
+Equipping all servers connected to the local switch will make all servers connected to all other servers through their respective `eth1` links.
+The routing table of `phyA` will look like this:
+
+.Routing table parts of phyA
+----
+2001:db8:b:b::/64 via fe80::ff:fee1:b dev eth1 proto ra metric 1024 pref medium
+2001:db8:c:c::/64 via fe80::ff:fee1:c dev eth1 proto ra metric 1024 pref medium
+[...]
+default via fe80::1 dev eth0 proto static metric 1024 pref medium
+----
+
+=== Considerations
+
+IPv6 follows some routing concepts rather different from what's usual with IPv4.
+Using the link-local IPv6 addresses of the interfaces has significant advantages over the usual "private address" approach of IPv4 in such situations:
+On IP level, it is totally transparent over which interface the packets are sent. `phyB` is always `phyB`, regardless whether it is connected from `phyA` or from anywhere else.
+Only `phyA`, however, will use the local switch for connecting, while everyone else will go over the global infrastructure.
+And on `phyA`, you do not have to think about routing issues. You just connect to `phyB` and in the background, routing is done through the appropriate interface.

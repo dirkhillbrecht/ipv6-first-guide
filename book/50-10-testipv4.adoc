@@ -1,0 +1,26 @@
+== Testing IPv4 connectivity from an IPv6-connected host
+
+If you work with this setup, you usually will have an IPv6-connected workstation so that you can access your virtual machines without any proxying.
+That makes it a bit complicated to actually test the IPv4 connectivity of services as IPv6 is by definition always the preferred protocol - if it is available.
+
+At least on Linux systems, switching off IPv6 for testing purposes is not difficult, fortunately:
+
+* Close all (IPv6) ssh etc. connections! They will be stalled anyway if you turn off IPv6.
+* Check with `ip -6 a` that you (still) have IPv6 addresses.
+* Perform `echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6`. This disables IPv6 completely on this computer immediately.
+* Check with `ip -6 a` that you have no IPv6 addresses any more.
+
+Every and all connections from this computer are performed via IPv4 now.
+Remember that `ssh`-ing to your virtual machines is not possible any more now!
+You have to `ssh` to your physical host (or any other IPv6-connected machine) and only from there open a connection to the virtual machine.
+
+To reenable IPv6, perform the following steps:
+
+* Perform `echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6`. This reenables IPv6.
+* As you usually get your IPv6 addresses via router advertisements, you will not have IPv6 routing again immediately.
+You might shutdown and restart your network devices for that.
+
+It might even be that some services do not behave well if they get cut off their network connectivity so harshly.
+You might need to reboot the system to get everything in order again.
+Fortunately, just performing some `echo` commands to `/proc` files is always a volatile operation.
+After a reboot, everything about turning off IPv4 this way will be forgotten.

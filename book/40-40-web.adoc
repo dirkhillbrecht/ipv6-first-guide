@@ -1,0 +1,203 @@
+== Web server
+
+I won't describe how to set up and configure an Apache or Nginx web server.
+There is a plethora of such guides on the internet.
+I will only cover that one small difference between our setup here and the every-person's server out there:
+
+_Our web server in a virtual machine does not have IPv4 connectivity._
+
+Of course, you can say: "I don't care. People should use IPv6 or they miss the service."
+If you do that, you're done. The server works as expected and everything works as long as all connections can be established via IPv6.
+
+Unfortunately, things are not that simple in many cases.
+There are still many installations which have only IPv4 connectivity, even in 2020.
+Even if a network is connected via IPv6, it does not mean that every device can use the protocol.
+E.g. many microcontrollers (like the ESP 8266) do only have an IPv4 procotol stack implemented.
+So, an IPv6-only web server is in itself no problem but even in 2020 it will not be generally reachable.
+
+On the other hand, the whole idea behind this setup is to have IPv6-only virtual machines.
+It does not help if we have an IPv6-only setup - only to add IPv4 connectivity to each machine due to the services running on them.
+
+Fortunately, for HTTP-based services, there is an elegant solution to this problem: We use a relay which takes IPv4 traffic and forwards it to the IPv6 machine. To be more precise: We use our physical host to relay incoming IPv4 connections to the servers on its virtual machine(s) with a web server configured as reverse proxy. This way, we _split_ incoming connections on different servers based on the protocol:
+
+* IPv6 clients do connect directly to the web server on the virtual machine.
+* IPv4 clients do connect to the physical host via IPv4 which forwards the connection to the virtual machine via IPv6
+
+.Connect to web server via IPv6 or IPv4
+[plantuml,format="svg",align="center"]
+....
+@startuml
+hide footbox
+participant Client as c
+participant "Web server on\nPhysical host" as p
+participant "Web server on\nVirtual machine" as v
+
+== IPv6 query ==
+
+c -> v : HTTP request via IPv6
+v -> c : HTTP reply via IPv6
+
+== IPv4 query ==
+
+c -> p : HTTP request via IPv4
+p -> v : Forwarded HTTP request via IPv6
+v -> p : HTTP reply via IPv6
+p -> c : Forwarded HTTP reply via IPv4
+@enduml
+....
+
+=== Configure appropriate DNS entries
+
+For this scheme to work, DNS entries must be setup in a special way:
+For a web site `www.example.org`, you define an `A` record which points to the _physical host_ but an `AAAA` record which points to the _virtual machine_.
+
+After all, this is the main idea behind everything which is following now.
+
+.Different machines for the same name
+CAUTION: Note that you should really understand what happens here: `www.example.org` will lead you to _different machines_ depending on the IP protocol version you use.
+If you connect to the machine with this name e.g. via `ssh` (for maintenance purposes), you might end on the physical host if your workstation has no IPv6 connectivity!
+I really strongly suggest that you train yourself to _never ever_ use the DNS names of the web sites for such purposes.
+It's `virthost.example.org` which carries `www.example.org` - and if you need to access the machine, you connect to `virthost`, _not_ to `www`.
+
+For the following examples, we assume that the following DNS entries exist:
+
+.Existing DNS entries
+----
+physical.example.org A 1.2.3.4  # IPv4 address of the physical host
+
+physical.example.org AAAA 11:22:33::1  # IPv6 address of the physical host
+virtual.example.org AAAA 11:22:33::44  # IPv6 address of the virtual machine
+----
+
+==== Direct DNS records for the web sites
+
+This is the simple approach: You just put direct `A` and `AAAA` records for the web servers.
+Assuming the entries for the hosts as described above you define the following entries:
+
+.Direct DNS entries for HTTP services
+----
+www.example.org A 1.2.3.4          # IPv4 address of the physical host
+www.example.org AAAA 11:22:33::44  # IPv6 address of the virtual machine
+blog.example.org A 1.2.3.4         # same addresses for other services on the same host
+blog.example.org AAAA 11:22:33::44
+----
+
+This way, the appropriate name resolution is performed for each protocol and leads directly to the web server in charge.
+
+==== CNAME entries
+
+The direct approach is very straight forward but has some drawbacks.
+You do not see on first sight that these addresses are somehow "special" in that they point to different servers depending on the protocol.
+And, of course, if for any reason the IP address changes, it must be changed for all entries individually.
+
+Therefore, you can follow a two-step approach: Define `A` and `AAAA` entries once for the virtual/physical address pairs and reference them for the individual addresses via `CNAME` entries:
+
+.DNS entries for HTTP services via CNAMEs
+----
+virtual64.example.org A 1.2.3.4          # IPv4 address of the physical host
+virtual64.example.org AAAA 11:22:33::44  # IPv6 address of the virtual machine
+
+www.example.org CNAME virtual64.example.org
+blog.example.org CNAME virtual64.example.org
+----
+
+This way, you can even establish the convention to have such an entry with a certain name for each virtual machine, here `<machinename>64` for `<machinename>`.
+
+==== Common SSL certificates
+
+Clients may establish HTTPS connections via IPv6 and IPv4.
+Therefore, the HTTP servers on both physical host and virtual machine must have the keys for the domains.
+You can run the web-server-based certification schemes on the virtual machine or use the DNS-based certification scheme.
+
+Finally, the SSL certificates for your web site must be available on both the virtual machine and the physical host.
+We assume the certificates below `/etc/letsencrypt`.
+
+=== Setup on the virtual machine
+
+Install apache2. Then, enable rewrite using `a2enmod ssl rewrite`. This is needed for encryption and the mandatory redirect from http to https.
+
+Create the configuration, e.g. in `/etc/apache2/sites-available/testsite.conf`:
+
+.Apache configuration on the virtual machine
+----
+<VirtualHost *:80>
+    ServerAdmin admin@example.org
+    ServerName www.example.org
+    
+    # Rewriting everything to SSL
+    RewriteEngine on
+    RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,QSA,R=permanent]
+</VirtualHost>
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerAdmin admin@example.org
+    ServerName www.example.org
+
+    # SSL certificate location
+    SSLCertificateFile /etc/letsencrypt/live/example.org/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/example.org/privkey.pem
+    Include /etc/letsencrypt/options-ssl-apache.conf
+    
+    # Logging
+    ErrorLog ${APACHE_LOG_DIR}/www.example.org-error.log
+    CustomLog ${APACHE_LOG_DIR}/www.example.org-access.log combined
+    
+    # Actual content definitions
+    DocumentRoot /usr/local/webspace/www.example.org
+    <Directory /usr/local/webspace/www.example.org>
+        Require all granted
+        AllowOverride All
+    </Directory>
+</VirtualHost>
+</IfModule>
+----
+
+Enable the website using `a2ensite testsite.conf`. Now, it is available via IPv6.
+
+=== Setup the IPv4 proxy on the physical host
+
+Install apache also here. You have to enable the proxy modules additionally to SSL and rewrite using `a2enmod ssl rewrite proxy proxy_http`.
+
+Create the site configuration, also in `/etc/apache2/sites-available/testsite.conf`:
+
+.Apache configuration on the physical host
+----
+<VirtualHost *:80>
+    ServerAdmin admin@example.org
+    ServerName www.example.org
+
+    # Rewrite everything to SSL
+    RewriteEngine on
+    RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,QSA,R=permanent]
+</VirtualHost>
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerAdmin admin@example.org
+    ServerName www.example.org
+
+    # SSL certificate stuff
+    SSLCertificateFile /etc/letsencrypt/live/example.org/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/example.org/privkey.pem
+    Include /etc/letsencrypt/options-ssl-apache.conf
+
+    # Proxy settings
+    SSLProxyEngine on
+    ProxyRequests Off
+    ProxyPass / https://www.example.org/
+    ProxyPassReverse / https://www.example.org/
+
+    # Logging
+    ErrorLog ${APACHE_LOG_DIR}/www.example.org-error.log
+    CustomLog ${APACHE_LOG_DIR}/www.example.org-access.log combined
+</VirtualHost>
+</IfModule>
+----
+
+Enable it with `a2ensite www.example.org`. Now, your website is also available via IPv4.
+
+Note that the Apache on the physical host resolves its proxy target simply as `www.example.org`. This works as by specification IPv6 name resolution always superceeds IPv4 name  resolution. This way, the physical host actually forwards the incoming request to the real server on the virtual machine.
+
+Note that we define the IPv4 redirection server directly on the physical host and _not_ as forwarder to the HTTP-definition in the virtual machine.
+This way, proxied requests are reduced.
