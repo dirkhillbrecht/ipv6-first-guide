@@ -1,4 +1,4 @@
-== SSL certificates with Let's encrypt
+== SSL certificates with Let's Encrypt
 
 Today's internet requires encrypted connections for any serious web service.
 Encrypted connections require certified encryption keys.
