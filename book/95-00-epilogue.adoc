@@ -1,7 +1,5 @@
 = Epilogue
 
-This is the epilogue.
-
 == Experiences and lessons learned
 
 I use the setup described here since October 2018 for my own internet server which serves multiple web sites, my complete private e-mail and a number of other services.
@@ -20,7 +18,7 @@ Everything continues to work if you remove the IPv4 infrastructure - it is only 
 Hopefully, in the not too distance future this becomes less and less of an issue so that a true IPv6-only setup can be used without any disadvantages.
 
 
-=== Maturity of configurations
+== Maturity of configurations
 
 This guide describes several configurations with different level of maturity. This is how the maturity is *as of August 2020*:
 
