@@ -19,9 +19,76 @@ As I wrote, our virtual machines shall have IPv6-only internet. That implies tha
 
 I decided to go with the "Tayga" server. It's scope is limited to exactly perform NAT64. This makes it necessary to add further services to make all this really useable but it also minimizes configuration complexity.
 
+[[sec-how-tayga-works]]
+==== How Tayga works (in this setup)
+
+Tayga acts as a network address translator.
+It receives incoming IPv6 packets targetted at an address in the `64:ff9b::/96` network.
+It takes the _least_ 32 bits of this address and takes them as IPv4 target address.
+I.e. the IPv4 address `1.2.3.4` will be represented by the IPv6 address `64:ff9b::102:304`.
+
+.Representation of IPv4 address parts in IPv6 addresses
+[NOTE]
+====
+IPv4 uses decimal numbers to represent address parts, IPv6 uses hexadecimal representation.
+An IPv4 address like `85.223.40.38` will look a bit different therefore in the NAT64 IPv6 representation as it reads `64:ff9b::55df:2826` in the usual IPv6 address representation.
+
+It is allowed to write the lowest 32 bits of an IPv6 address in the usual IPv6 address syntax,
+so the address can also be written as `64:ff9b::85.223.40.38`.
+The bits, however, are exactly the same.
+
+I refrain from this syntax in this guide.
+====
+
+Additionally, Tayga takes the IPv6 source address and maps it onto a private IPv4 address, e.g. one out of `192.168.255.0/24`.
+With these two IPv4 addresses it constructs an IPv4 packet with the content of the received IPv6 packet and puts it into the IPv4 network stack of the physical host.
+
+Now, Linux takes over. It uses its standard source NAT mechanisms to map the IPv4 packet with the private source address onto the public IPv4 address of the machine and sends it out.
+When the answer package arrives, it converts the target address back onto the private IPv4 address the packet emerged from and forwards it to the Tayga process.
+
+Tayga can rebuild the IPv6 origin of the communication from the private IPv4 target address of the answer packet.
+It also can derive the correct `64:ff9b::/96` source address from the IPv4 source address of the packet.
+With these two addresses it builds an IPv6 packet with the same content as the received IPv4 packet and sends it to the actual IPv6 communication partner.
+
+The whole scheme looks like this:
+
+.NAT64 communication processing
+[plantuml,format="svg",align="center"]
+....
+@startuml
+hide footbox
+
+participant "IPv6 sender\n2001:db8::1" as s
+participant "IPv6 side\nof Tayga" as t6
+participant "IPv4 side\nof Tayga" as t4
+participant "IPv4\nnetwork stack" as l
+participant "IPv4 interface\n5.6.7.8" as n
+participant "IPv4 target\n1.2.3.4" as t
+
+== Send request ==
+
+s->t6: Send IPv6 packet\nfrom 2001:db8::1\nto 64:ff9b::102:304
+t6->t4: Construct IPv4 target address\n1.2.3.4 from 64:ff9b::102:304
+t4->l: Assign private source address\n192.168.255.45 to\nIPv6 source 2001:db8::1\nand build complete IPv4 packet
+l->n: Usual IPv4 source NAT\nfrom 192.168.255.45\nto 5.6.7.8
+n->t: Send IPv4 packet\nfrom 5.6.7.8\nto 1.2.3.4
+
+== Receive response ==
+
+t->n: Send IPv4 packet\nfrom 1.2.3.4\nto 5.6.7.8
+n->l: Pass packet into\nnetwork stack
+l->t4: Reverse IPv4 NAT,\ndeliver packet\nto 192.168.255.45
+t4->t6: Find original\nsource 2001:db8::1\nfor 192.168.255.45
+t6->s: Construct IPv6\nsource 64:ff9b::102:304\nfrom 1.2.3.4\nand deliver IPv6 packet
+@enduml
+....
+
+
+==== Installing Tayga on the physical host
+
 Start by installing the tayga service by the usual `apt install tayga`.
 
-In `/etc/tayga.conf`, enable the disabled `ipv6-addr` directive as this is needed for working with the well-known prefix. You should set the IPv6 address to something random in your IPv6 subnet:
+In `/etc/tayga.conf`, enable the disabled `ipv6-addr` directive as this is needed for working with the well-known prefix. Set the IPv6 address to something random in your IPv6 subnet:
 
 .Random network address for the tayga NAT64 service
 ----
@@ -104,9 +171,36 @@ Launch the service with `systemctl start tayga`. After that, `systemctl status t
 .Forgot to enable the service on Ubuntu 18.04 and earlier?
 NOTE: If the Active state is `active (exited)` and the protocol says something about `set RUN to yes`, you have forgotten to enable the RUN option in `/etc/default/tayga`. Correct it as described above and issue `systemctl stop tayga` and `systemctl start tayga`.
 
+==== Tayga and firewalls
+
+As described above, Tayga uses the Linux network stack for the IPv4 source NAT step.
+For this, it adds a routing rule into the kernel.
+You can see it using e.g. `iptables`:
+
+.Tayga NAT routing table entry
+----
+# iptables -t nat -L
+[...]
+Chain POSTROUTING (policy ACCEPT)
+target     prot opt source               destination
+[...]
+MASQUERADE  all  --  192.168.255.0/24     anywhere
+----
+
+It is important that this rule exists, otherwise NAT64 will not work!
+Keep this in mind especially if you install a firewall on the physical host.
+If that firewall overwrites the complete routing rules set, it will also drop this rule and render Tayga unfunctional.
+We cover <<sec-firewall,below>> how to integrate Tayga and the Shorewall firewall.
+
 === DNS64 with bind
 
-NAT64 is usually used together with a so-called "DNS64" name server. This is a specially configured name server. If a client asks it for an IPv6 name resolution, i.e. an `AAAA` name service record and there is only an IPv4 `A` record for the requested name, the DNS64 name server "mocks up" an `AAAA` record munging the IPv4 address and a "well-known prefix" to a synthetical IPv6 address. This address - surprise, surprise - points directly to a nicely prepared NAT64 server so that the IPv6 system talks to an IPv4 system transparently hidden behind the NAT64 proxy.
+In the last chapter, we have assumed that the IPv6 client addresses in IPv4 host with a special IPv6 address.
+The question remains how a process is tricked into doing this.
+We solve this problem now.
+
+==== The concept of DNS64
+
+NAT64 is usually used together with a so-called "DNS64" name server. This is a specially configured name server. If a client asks it for an IPv6 name resolution, i.e. an `AAAA` name service record, and there is only an IPv4 `A` record for the requested name, the DNS64 name server "mocks up" an `AAAA` record munging the IPv4 address and a "well-known prefix" to a synthetical IPv6 address. This address - surprise, surprise - points directly to a nicely prepared NAT64 server so that the IPv6 system talks to an IPv4 system transparently hidden behind the NAT64 proxy.
 
 .How DNS64 and NAT64 play together
 [plantuml,format="svg",align="center"]
@@ -143,6 +237,8 @@ s -> n : Return data
 n -> v : Return data
 @enduml
 ....
+
+==== Installing bind with DNS64
 
 We setup the DNS64 server using a classic bind DNS server. Modern versions include DNS64, it only has to be activated. Start the install with the usual `apt install bind9`.
 
@@ -213,7 +309,7 @@ TIP: So far, the name server is only used for DNS64. You can also use the Google
 
 === Router advertisement with radvd
 
-With NAT64 and DNS64 in place, we're almost ready to server virtual machines on the host.
+With NAT64 and DNS64 in place, we're almost ready to serve virtual machines on the host.
 The last missing bit is the network configuration.
 
 Of course, you could configure your virtual hosts' network manually.
@@ -256,7 +352,7 @@ interface br0 { [...]
                 [...]
                 AdvValidLifetime infinity;
         };
-        
+
         RDNSS <IPv6 address of the physical host> {};
         route 64:ff9b::/96 {
                 AdvRouteLifetime infinity;
@@ -300,7 +396,7 @@ After `radvd` is up and running, check the physical host's bridge interface with
 
 .Spurious auto-configured routes on br0
 ----
-    inet6 2a01:4f8:1:2345:abc:4680:1:22/64 scope global dynamic mngtmpaddr noprefixroute 
+    inet6 2a01:4f8:1:2345:abc:4680:1:22/64 scope global dynamic mngtmpaddr noprefixroute
        valid_lft 85234sec preferred_lft 14943sec
 ----
 
@@ -308,7 +404,7 @@ your bridge is responding to the network announcements. Go back to the network c
 
 .Correct routes on br0
 ----
-    inet6 2a01:4f8:1:2345:abc:4680:1:22/64 scope global 
+    inet6 2a01:4f8:1:2345:abc:4680:1:22/64 scope global
        valid_lft forever preferred_lft forever
 ----
 
