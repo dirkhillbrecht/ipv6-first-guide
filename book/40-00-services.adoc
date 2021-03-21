@@ -1,5 +1,7 @@
 = Services
 
+// NO_LIBRARY
+
 So far, we have described how to setup the basic operating systems for physical host and virtual machines.
 Usually, systems are installed to run services.
 

@@ -3,6 +3,7 @@
 [cols="^.^4,^.^3,<.^20",options="header"]
 |===
 |Date|Author|Changes
-|2020-08-09|dh|Initial version
+|2021-03-21|dh|Add <<sec-firewall,firewall chapter>> with Shorewall and sshguard and cover <<sec-network-delay-systemd,systemd-networkd delay problem>> of virtual machines
 |2020-08-09|dh|Some updates on integration with web site and github, license added, preface rewritten
+|2020-08-09|dh|Initial version
 |===

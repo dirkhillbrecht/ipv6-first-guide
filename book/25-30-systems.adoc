@@ -37,6 +37,8 @@ Netplan summarizes router advertisement in the "dhcp6" statement. You do not nee
 
 Note that after (re-)booting the virtual machine, it may take some seconds until it has configured its network interface. Once it has done so, everything should work without problems.
 
+Check if you have the <<sec-network-delay-systemd,network setup delay problem>> after reboots and fix them as described in the referenced section.
+
 === Ubuntu 18.04
 
 Ubuntu 18.04 is installed exactly the same way as Ubuntu 20.04.

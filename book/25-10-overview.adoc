@@ -52,7 +52,7 @@ Your virtual machine is fully connected to the internet any can be reached from 
 The only restriction is that a connecting party must use IPv6.
 Most systems, however, are connected by IPv6 these days.
 
-Even if the virtual hosts a service which must also be accessible by IPv4-only clients, a direct IPv4 connection for the virtual machine is not mandatory.
+Even if the virtual machine hosts a service which must also be accessible by IPv4-only clients, a direct IPv4 connection for the virtual machine is not mandatory.
 Especially for HTTP-based services, we will configure a reverse proxying scheme on the physical host which allows transparent connections to IPv6-only web servers on the virtual machines for IPv4-only clients.
 So, only configure a direct IPv4 connection into a virtual machine if it runs a service which _requires_ it.
 
@@ -70,7 +70,7 @@ If the physical host is configured *with Netplan*, add the route to the virtual 
 
 .Additional IPv4 address in Netplan-based configuration on the physical host
 ----
-root@merlin ~ # cat /etc/netplan/01-netcfg.yaml 
+root@merlin ~ # cat /etc/netplan/01-netcfg.yaml
 network:
   [...]
   bridges:
@@ -120,7 +120,7 @@ network:
           via: IPv4 address OF THE PHYSICAL HOST
           on-link: true
 ----
-      
+
 .The physical host is the IPv4 default route!
 CAUTION: Note that - at least in the Hetzner network - it is crucial that you declare _the physical host_ as the default route for IPv4 traffic from the virtual machines! If you set the gateway given by Hetzner, traffic is not routed. In this case, you can reach the guest from the host but from nowhere else via IPv4.
 
@@ -129,7 +129,7 @@ On the virtual machine, you can apply your changes with `netplan try` and pressi
 .IPv4 routing table on the virtual machine
 ----
 # ip -4 r
-default via <IPv4 address of physical host> dev ens3 proto static onlink 
+default via <IPv4 address of physical host> dev ens3 proto static onlink
 ----
 
 .Information on systemd-networkd-based setups missing
@@ -158,6 +158,7 @@ e.g.
 Finally, *add DNS and reverse DNS entries* for the IPv4 address for the virtual machine.
 Now, it is directly accessible by both IPv4 and IPv6 connections.
 
+[[sec-dns-ipv4-enhanced]]
 ==== Name service on IPv4-enhanced virtual machines.
 
 If you follow this guide, an IPv4-enhanced virtual machine will still connect to IPv4-only servers via IPv6! The reason is the DNS64-enhanced name server. It will deliver IPv6 addresses for such servers and the outgoing connection will be established through the NAT64 gateway.
