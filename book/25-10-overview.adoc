@@ -182,3 +182,68 @@ My strong advise is: Use IPv6 as the standard protocol for everything you do on 
 And for such a setup, you do not need fancy autoconfiguration. Just enter the address on the physical host and the virtual machine and you're done. If somewhen in the future, IPv4 connectivity is not needed any more, throw it away.
 
 It's much simpler and less error-prone than administrating additional DHCP servers and configuration files.
+
+
+[[sec-network-delay-systemd]]
+=== Network detection delays with systemd-networkd
+
+On some systems, namely Ubuntu 20.04, `systemd-networkd` has a problem detecting that all networks came up on boot.
+Typical symptoms are
+
+* More than two minutes boot time even though the virtual machine becomes ready some seconds after a reboot command.
+* `/etc/rc.local` is only executed after some spare time.
+* Services like the firewall are only activated minutes after the reboot.
+* `systemd-networkd` writes something like
++
+----
+Event loop failed: Connection timed out
+----
++
+into the syslog.
+
+If you face such symptoms, check if `systemd-networkd` is the reason. Just run as root on the command line:
+
+----
+# /usr/lib/systemd/systemd-networkd-wait-online --timeout=3
+----
+
+If this command issues the mentioned `Event loop failed` error message on the command line after 3 seconds, you have this problem.
+
+The actual reason for this problem is a bit unclear.
+There seem to be some glitches in the way systemd-networkd detects the network availability in virtual machines under certain circumstances.
+
+However, as the virtual machines do not have more than one network anyway it is enough to wait until _any_ network of the machine became available. Issue
+
+----
+# /usr/lib/systemd/systemd-networkd-wait-online --timeout=3 --any
+----
+
+It should return immediately without error message.
+
+To make this workaround permanent, change the configuration of the systemd-networkd-wait-online service. There is a default way of doing this in systemd:
+
+* Copy the service configuration from the maintainer's systemd configuration into the user-editable systemd configuration:
++
+----
+cp /lib/systemd/system/systemd-networkd-wait-online.service /etc/systemd/system/systemd-networkd-wait-online.service
+----
+
+* Open `/etc/systemd/system/systemd-networkd-wait-online.service` in an editor.
+
+* Look for the line
++
+----
+ExecStart=/lib/systemd/systemd-networkd-wait-online
+----
++
+in the `[Service]` section.
+
+* Append the `--any` parameter:
++
+----
+ExecStart=/lib/systemd/systemd-networkd-wait-online --any
+----
+
+* Run `systemctl daemon-reload` so that systemd uses your user-driven service configuration instead of the one from the maintainer.
+
+You're done! Rebooting the virtual machine should not be a question of seconds instead of minutes.
