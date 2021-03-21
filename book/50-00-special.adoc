@@ -1,8 +1,12 @@
 = Special tasks and setups
 
+// NO_LIBRARY
+
 While IPv6 is out for two decades now, there are still tasks for which it is difficult to get decent documentation on the internet.
 As an IPv6-first setup like this raises a lot of issues, this section collects the results of such investigation on certain tasks.
 
 include::50-10-testipv4.adoc[]
 
 include::50-20-staticroute.adoc[]
+
+include::50-30-firewall.adoc[]

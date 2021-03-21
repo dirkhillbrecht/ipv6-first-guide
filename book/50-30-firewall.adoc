@@ -1,0 +1,232 @@
+[[sec-firewall]]
+== Firewall configuration
+
+Often, firewalls are used to - hopefully - increase the security level of hosts. A physical host serving potentially a number of virtual machines can be a valuable attack target and therefore it can make great sense to implement such an additional protection layer.
+
+It is important to recap the overall layout of our setup: We use a _bridged_ setup. I.e. from the network perspective, the physical host and all the virtual machines are _independent_. So, the physical host (and its firewall) may not even see all network traffic from the virtual machines.
+
+So, generally, a firewall on the physical host does not need to take the traffic of the virtual machines into consideration - with two important exceptions:
+
+* The physical host serves the DNS server for all virtual machines.
+
+* The physical host also runs the NAT64 server for the virtual machines.
+
+Both services must be accessible for the virtual machines.
+Apart from that they are as good or bad as any other server "on the internet" when it comes to connecting to services on the physical host.
+
+We will now see how to enable the services mentioned above on the physical host in the firewall.
+
+=== Shorewall on the physical host
+
+Shorewall is a quite sophisticated system to manage the complete network routing rules on a host.
+It replaces all rules in the routing tables.
+This _can_ render services unusable if you do not configure them in Shorewall's own rules.
+
+Shorewall separates IPv4 and IPv6 strictly from each other in all configuration steps.
+While this makes sense from the protocol point of view, you have to always keep both protocols in mind and might repeat some configuration steps for both protocols.
+
+Following Shorewall's structure, we look at IPv6 and IPv4 configuration separately.
+
+
+==== IPv6 configuration
+
+We start with configuring the IPv6 firewall.
+All IPv6-related configuration files are located in `/etc/shorewall6`.
+
+Shorewall has a hierarchically configuration concept for the system.
+At the uppermost layer, you configure *zones* in the file `/etc/firewall6/zones`.
+To the three standard zones of the usual two-interfaces-example, you add the nat64 zone for the Tayga NAT64 service:
+
+.Shorewall IPv6 zones configuration
+----
+# cat /etc/shorewall6/zones
+#ZONE   TYPE    OPTIONS   IN  OUT
+fw      firewall
+net     ipv6
+loc     ipv6
+nat64   ipv6
+----
+
+Then, you assign the *interfaces* to these zones. The `net` zone representing the "outer world" contains the bridge:
+
+.Shorewall IPv6 interfaces configuration
+----
+# cat /etc/shorewall6/interfaces
+?FORMAT 2
+#ZONE   INTERFACE       OPTIONS
+net     br0             tcpflags,nosmurfs,sourceroute=0
+loc     v+              tcpflags,nosmurfs
+nat64   nat64           tcpflags,forward=1
+----
+
+Note that the local zone "`loc`" has no real use in our setup.
+It contains the "virtual bridge" devices `virbrX` which are created by KVM automatically.
+We do not use them as they open a routed (and masqueraded) IPv4 network for virtual machines with private IPv4 addresses.
+You should leave the specification intact, however, as it might be handy for actual local networks.
+
+On the IPv6 side, this is enough assign the correct interfaces to the zones and to enable Tayga's NAT64 mechanism.
+You do not need to add any *policy* sets regarding the `nat64` zone in the IPv6 protocol.
+
+With this setup declared, outgoing connections are generally allowed while incoming connections are completely blocked.
+As the server is only remotely accessible, this is not really optimal.
+Therefore, you have to add some actual *rules* to drill all the needed holes into this firewall.
+At least four services should be accessible:
+
+* Basic IPv6 protocol stuff
+
+* ssh
+
+* DNS for the virtual machines
+
+* NAT64 for the virtual machines.
+
+This can be archived with the following Shorewall IPv6 rules setup:
+
+
+At least `ssh` connections _must_ be possible. I suggest to also allow some IPv6 basic connection protocol packets:
+
+.Shorewall IPv6 minimal rules
+----
+# cat /etc/shorewall6/rules
+#ACTION         SOURCE  DEST  PROTO      DEST           SOURCE  ORIGINAL  RATE
+
+# Declare rules for new packets
+?SECTION NEW
+
+# Declare shortcut for server names
+?SET VHOSTS "[2a01:4f8:1:3::]/64,[fe80::]/10"
+
+# IPv6 services
+ACCEPT          all     all   ipv6-icmp  time-exceeded
+ACCEPT          all     all   ipv6-icmp  echo-request   -       -         3/sec:10
+Trcrt(ACCEPT)   all     all
+
+# ssh from everywhere
+SSH(ACCEPT)     net     all
+
+# DNS for virtual hosts
+DNS(ACCEPT)     net:$VHOSTS  fw
+
+# NAT64 for virtual hosts
+ACCEPT          net:$VHOSTS  nat64
+----
+
+With this setup, the virtual hosts can access the DNS64-capable DNS server on the physical host and (the IPv6 part of) the NAT64 service.
+
+Remember: Other connections to and from the virtual machines are _not_ affected by these firewall settings!
+We are using a bridged setup, so logically, all packets between the virtual machines and "the internet" are just forwarded.
+If you want to filter the internet traffic on the virtual machines, you just install a firewall there.
+
+
+==== IPv4 configuration
+
+IPv4 in Shorewall's configuration similar to the IPv6 part.
+All configuration files for IPv4 filtering are kept in `/etc/shorewall`.
+You need to add the `nat64` zone also to the *zones* here:
+
+.Shorewall IPv4 zones
+----
+# cat /etc/shorewall/zones
+#ZONE   TYPE
+fw      firewall
+net     ipv4
+loc     ipv4
+nat64   ipv4
+----
+
+You also have to assign the *interfaces* to the zones just as in the IPv6 configuration:
+
+.Shorewall IPv4 interface assignments
+----
+# cat /etc/shorewall/interfaces
+?FORMAT 2
+#ZONE   INTERFACE       OPTIONS
+net     br0             tcpflags,nosmurfs,routefilter,logmartians,sourceroute=0
+loc     v+              tcpflags,nosmurfs
+nat64   nat64           tcpflags,nosmurfs,routefilter,logmartians,routeback
+----
+
+In the IPv4 protocol, the `nat64` interface actually communicates with the outside.
+This has to be allowed in the firewall.
+A complete functional *policy* set looks like this:
+
+.Shorewall IPv4 policies
+----
+# cat /etc/shorewall/policy
+#SOURCE         DEST            POLICY          LOGLEVEL
+net             fw              DROP            info
+
+fw              net             ACCEPT
+nat64           net             ACCEPT
+
+fw              loc             ACCEPT
+loc             all             ACCEPT
+
+# THE FOLLOWING POLICY MUST BE LAST
+all             all             REJECT          info
+----
+
+The IPv4 *rules* do not contain _any_ configuration specific to our setup. They are totally generic and could be like this:
+
+.Minimalistic Shorewall IPv4 rule set
+----
+#ACTION         SOURCE          DEST            PROTO
+?SECTION NEW
+
+Rfc1918(DROP)   net             fw
+
+ACCEPT          all             all     icmp    fragmentation-needed
+ACCEPT          all             all     icmp    time-exceeded
+ACCEPT          all             all     icmp    echo-request    -       -       3/sec:10
+Trcrt(ACCEPT)   all             all
+
+# ssh from everywhere
+SSH(ACCEPT)     net     all
+----
+
+Once again: You do not need to enable _any_ services or ports needed by the virtual machines.
+This traffic will _not_ go through the firewall of the physical host.
+
+There is one important final configuration detail:
+As described <<sec-how-tayga-works,above>>, Tayga uses the default network address translation mechanisms of Linux for the NAT64 process.
+Therefore, it adds a masquerating rule into the firewall on startup.
+However, when Shorewall starts later, it empties the complete rule set which breaks Tayga.
+
+To prevent this, Shorewall needs an additional *snat* (**s**ource **n**etwork **a**ddress **t**ranslation) rule which brings the rule needed by Tayga into Shorewall's own configuration:
+
+.Shorewall source NAT IPv4 rule for Tayga NAT64
+----
+# cat /etc/shorewall/snat
+#ACTION    SOURCE               DEST
+MASQUERADE 192.168.255.0/24     br0
+----
+
+With these rules applied to Shorewall, all network services of the IPv6 first setup run, the virtual machines can communicate through their DNS64/NAT64 translation layer and only those services are connectable from the outside which are enabled in the firewall.
+
+
+=== Firewalls on virtual machines
+
+Of course, you may install Shorewall (or any other firewall system) also on the virtual machines. You must even do so if you want to restrict access to services as these connections generally do not go through the physical machine's network stack.
+
+If your virtual machines are IPv6-only machines (as this guide recommends), you only have to care about IPv6 traffic. The machine will never see any IPv4 packets from the outside.
+
+If your virtual machine has direct IPv4 connectivity with an official IP address, you have to take care for it in the firewall. For both protocols you configure the firewall just as if the machine was a stand-alone system. Direct incoming traffic is in both cases unaffected of the physical machine.
+
+Note that even on virtual hosts with direct IPv4 connectivity, outgoing connections to IPv4 targets <<sec-dns-ipv4-enhanced,will still be passed>> through the DNS64/NAT64 layer so that the target machine will see the connection as opened from the physical host. The <<sec-email-setup-notes,e-mail setup notes>> describe how to change that (just do not use the DNS server of the physical host).
+
+
+=== ssh firewalling with sshguard
+
+The Shorewall rules recommended above enable ssh unconditionally from everywhere.
+While this usually has no security implications, log files clobbered with warnings become quite annoying.
+A simple and quite effective solution is the small "sshguard" package available for many distributions.
+
+sshguard scans the logs for failed ssh logins.
+If there were too many attempts from one source, it creates a temporary rule in the network stack dropping all network traffic from that source.
+
+sshguard can be installed alongside Shorewall without problems.
+If you use it, install it on the physical host and each virtual machine as each installation only knows about its own system.
+
+If you have trusted networks which connect to the machine regulary, consider adding these networks to sshguard's whitelist in `/etc/sshguard/whitelist`.
+Then, sshguard will not block these addresses even if some failed logins are logged.
+You can whitelist IPv4 and IPv6 addresses and address ranges in any order and combination.

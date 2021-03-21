@@ -27,6 +27,7 @@ After having the server prepaired on network and system level, it is time to act
 
 Thomas describes a contemporary e-mail server setup. The server allows for incoming and outgoing traffic. It is setup according to all anti-spam requirements with DKIP, DMARC and SPF entries in DNS. It offers SMTP and IMAP access for clients. It is a multi-user multi-domain setup. I run this since late 2018 without any problems.
 
+[[sec-email-setup-notes]]
 === Setup notes and hints
 
 Using Thomas' description is very straight forward. However, I'd like to add some notes.
