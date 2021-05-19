@@ -306,6 +306,66 @@ Note how the DNS server running on the physical host returns the _additional_ IP
 .Using an external DNS64 server
 TIP: So far, the name server is only used for DNS64. You can also use the Google servers `2001:4860:4860::6464` and `2001:4860:4860::64` (yes, these are _other_ servers than the public DNS servers mentioned above) offering this service. Their replies are compatible with our NAT64 setup. However, having an own server reduces external dependencies and allows for additional services lateron.
 
+[[sec-dns64-acl]]
+==== Restricting DNS64 to certain virtual machines
+
+You can restrict DNS64 service to certain of the virtual machines on the host.
+This might be needed as a machine should explicitly _not_ connect to IPv4 servers
+or because it has <<sec-add-ipv4,its own IPv4 address>> and should it to connect to the IPv4 internet instead of NAT64.
+
+DNS64 access restriction is done via bind9's access control lists.
+Just define an access control list for the DNS64 service and refer to it in the service configuration:
+
+.Access control list for the DNS64 service in /etc/bind/named.conf.options
+----
+acl dns64clients {
+   # address specification
+};
+
+options {
+        [...]
+        dns64 64:ff9b::/96 {
+                clients { dns64clients; };  # Refer to the ACL defined above
+        };
+};
+----
+
+There are two ways to specify the servers to allow DNS64 access:
+
+. You can simply specify the IPv6 addresses of all virtual machines which are _allowed_ to use DNS64:
++
+.DNS64 ACL with a positive host list
+----
+acl dns64clients {
+   2a01:4f8:1:2:a:bc:345:9;
+   2a01:4f8:1:2:a:bc:678:e;
+   2a01:4f8:1:2:a:bc:432:7;
+   [...]
+};
+----
++
+You _might_ work with net definitions (e.g. `2a01:4f8:1:2:a:bc::/96;`), but normally it does not really make any sense.
+The IPv6 addresses of your virtual machines will be derived from the MAC addresses of their (virtual) network cards
+and those are assigned randomly when the virtual machine is created.
+So, just stick with the actual, full IP adresses here.
+
+. You can also define the control list the other way around and specify those virtual hosts which should _not_ use DNS64:
++
+.DNS64 ACL with a negative host list
+----
+acl dns64clients {
+   !2a01:4f8:1:2:a:bc:567:d;
+   !2a01:4f8:1:2:a:bc:901:3;
+   !2a01:4f8:1:2:a:bc:864:b;
+   [...]
+   any;  # Grant access for all others!
+};
+----
++
+This option is better if DNS64 is the norm in your setup and you only want to exclude a small number of specific servers.
++
+Note that the final entry in your list _must_ be `any;` if you work with negative host specifications - otherwise, no DNS64 service is granted for anyone!
+
 
 === Router advertisement with radvd
 

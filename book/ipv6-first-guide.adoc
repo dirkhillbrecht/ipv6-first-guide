@@ -1,6 +1,6 @@
 = IPv6-first network configurations with Linux and KVM
 :Author: Dirk Hillbrecht
-:Date: 2021-03-21
+:Date: 2021-05-19
 :pdf-page-size: A4
 :pdf-style: ../lib/pdf-theme.yml
 :lang: en

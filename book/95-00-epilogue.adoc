@@ -22,16 +22,16 @@ Hopefully, in the not too distance future this becomes less and less of an issue
 
 == Maturity of configurations
 
-This guide describes several configurations with different level of maturity. This is how the maturity is *as of August 2020*:
+This guide describes several configurations with different level of maturity. This is how the maturity is *as of May 2021*:
 
 * Physical host
 ** Hetzner Online: Almost all systems configured this way are located at Hetzner's data center.
 Ubuntu 20.04:::: Guide has been in use for several installations and all seems to work fine. Usable for production systems as long as no router advertisements are used.
 Ubuntu 18.04:::: In usage for production systems since almost two years. Flawless. Use this for setups which "just have to run". Use this if in doubt what to use.
-Ubuntu 16.04:::: Still works but should not be used any more. Support will drop in Spring 2021.
+Ubuntu 16.04:::: Still works but should not be used any more. Support has been dropped in Spring 2021.
 ** Local network: I have also installed one system using this setup in a local network.
 Ubuntu 18.04:::: Works. Also the only one I've tried.
 * Virtual machines
-Ubuntu 20.04::: Works out of the box. Especially, here are not problems with IPv6 router advertisements. Strange world...
+Ubuntu 20.04::: Works out of the box. Especially, here are no problems with IPv6 router advertisements. Strange world...
 Ubuntu 18.04::: Works out of the box.
 Windows 10::: Works out of the box.

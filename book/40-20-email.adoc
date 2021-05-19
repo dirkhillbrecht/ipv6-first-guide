@@ -40,7 +40,7 @@ First and foremost, it helped me tremendously to understand that you should use 
 * Point the `MX` entry for _any_ domain you want to serve on your server to that `mx0.beispiel.de`. Remember - the MX for a domain _can be in any domain_!
 * After having setup the DNS for the first "real" domain, say `example.net`, you can simply copy SPF, DMARC, and DKIP entries from that domain to `example.com` and whichever other domain you want to serve.
 * Add the IPv4 addresses and the IPv6 network of the whole server to the `mynetworks` list in `/etc/postfix/main.cf`. That makes your mailserver a smart host for all other servers. So, every of your virtual servers - and even the physical machine - can send e-mail without any further setup steps. You just have to add the mail server as smart host (or forwarding host) for all outgoing e-mail.
-* Regarding the DNS setup of the mail server itself: This is the only of your virtual servers which should _not_ use the DNS64/NAT64 setup of the physical host! This server is fully connected to IPv4, so it can reach all IPv4 servers directly. It also _must_ do so, otherwise outgoing IPv4 connections would come from the "wrong" IPv4 address and the whole anti-spam mayhem would start again. The https://thomas-leister.de/en/mailserver-debian-stretch/[mail server setup instructions] suggest to install a small DNS server on the mail server itself. Just follow that instructions and you're done.
+* Regarding the DNS setup of the mail server itself: This virtual machine _must not_ use the DNS64/NAT64 setup of the physical host! This server is fully connected to IPv4, so it can reach all IPv4 servers directly. And it _must_ do so, otherwise outgoing IPv4 connections would come from the "wrong" IPv4 address and the whole anti-spam mayhem would start again. The https://thomas-leister.de/en/mailserver-debian-stretch/[mail server setup instructions] suggest to install a small DNS server on the mail server itself. Just follow that instructions and you're done. If you use the DNS server of the physical host, be sure to exclude this virtual machine from DNS64 by <<sec-dns64-acl,editing the access control list>> appropriately!
 
 Setting things up like this makes the further DNS setup rather simple: All your mail clients connect to the dedicated mail server domain, in the example `mx0.beispiel.de`, _also those_ for `example.net`, `example.com` or whatever. This way, you only need SSL certificates for the mail domain.
 
@@ -58,11 +58,11 @@ As I already explained, the mail domains which are hosted on the system can have
 
 * An MX entry in DNS must exist and point to `mx0.beispiel.de`.
 
-* The domain and the users must be entered in the data storage for postfix and dovecot (no reboot required after changes). Just follow the setup description of Thomas Leister above.
+* The domain and the users must be entered in the data storage for postfix and dovecot (neither reboot nor service restart required after changes). Just follow the setup description of Thomas Leister above.
 
 * Users set the _login name_ in their mail programs to e.g. `username@example.net`.
 
-* They should, as already explained, set IMAP and SMTP server name to the _name of the mail server_, e.g. `mx0.beispiel.de`, _not_ to anything in their actual domain! Even if there are DNS entries pointing to the mail server, there would be massive certificate warnings as the SSL certificates do not contain the mail domains, but only the domain of the mail server.</ul>
+* They should, as already explained, set IMAP and SMTP server name to the _name of the mail server_, e.g. `mx0.beispiel.de`, _not_ to anything in their actual domain! Even if there are DNS entries pointing to the mail server, there would be massive certificate warnings as the SSL certificates do not contain the mail domains, but only the domain of the mail server.
 
 === Recap
 

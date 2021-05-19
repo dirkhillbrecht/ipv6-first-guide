@@ -67,7 +67,7 @@ While that machine worked and served things quite reliably, I felt it aging pret
 It was an Ubuntu 16.04 system, it had only 4 GB of RAM and a quite outdated Athlon64 processor.
 
 Due to these parameters it was not possible to run virtualized setups  - which I wanted to do to seperate services.
-E.g. that machine has a complete e-mail server setup which I intended to use for my private e-mail but still hesitated to activate as it was rather complex and "manually setup".
+E.g. that machine had a complete e-mail server setup which I intended to use for my private e-mail but still hesitated to activate as it was rather complex and "manually setup".
 I followed an instruction guide on the internet which even its author said is outdated only two years later.
 
 There were other shortcomings like a less-than-optimal Let's-encrypt setup.
@@ -102,11 +102,11 @@ I wrote all steps down and published a series of blog articles in my https://blo
 As systems evolve and interest remained, I continued to update the articles.
 Eventually, I came to the conclusion that this scheme of updating was not flexible enough.
 So, I decided to rewrite the articles (and some unpublished articles with further explanations) into an Asciidoc document and publish it on github.
-As usual, this project became a bit bigger as I expected and after integrating and updating all information I suddenly had a PDF document of 80 pages.
+As usual, this project became a bit bigger as I expected and after integrating and updating all information I suddenly had a PDF document of 80 pages - which, as you see, has still grown since then...
 
 
 That was a bit more than I expected, but things are as they are.
-Have fun reading this guide! I hope it helps yousetting up your own, modern, IPv6-first setup.
+Have fun reading this guide! I hope it helps you setting up your own, modern, IPv6-first setup.
 
 .About IP addresses
 NOTE: IP addresses in this guide are made up and sometimes scrambled like `1.2.X.Y` or `1234:5:X:Y::abcd`. `X` and `Y` actually have to be numbers, of course...

@@ -43,7 +43,7 @@ The SLAAC mechanism derives the IP address from the MAC address of the virtual m
 
 If you want your virtual machine to be started automatically if the physical host starts up, you have to set the corresponding flag in the KVM configuration. In `virt-manager`, you find it in the "Boot options" for the virtual machine.
 
-
+[[sec-add-ipv4]]
 === Adding an IPv4 address to the virtual machine
 
 The first and foremost advice for this topic: *Don't do it!*
@@ -161,11 +161,30 @@ Now, it is directly accessible by both IPv4 and IPv6 connections.
 [[sec-dns-ipv4-enhanced]]
 ==== Name service on IPv4-enhanced virtual machines.
 
-If you follow this guide, an IPv4-enhanced virtual machine will still connect to IPv4-only servers via IPv6! The reason is the DNS64-enhanced name server. It will deliver IPv6 addresses for such servers and the outgoing connection will be established through the NAT64 gateway.
+If you have not defined <<sec-dns64-acl,DNS64 access control lists>> in the bind9 configuration on the physical host, an IPv4-enhanced virtual machine will still connect to IPv4-only servers via IPv6! The reason is the DNS64-enhanced name server. It will deliver IPv6 addresses for such servers and the outgoing connection will be established through the NAT64 gateway.
 
-Normally, this has no drawbacks. We install the IPv4 connectivity only for _clients_ which need to connect to a service on the virtual machine via IPv4 - and this is the case with the configuration described above. Remember that the whole NAT64/DNS64 magic happens at the DNS layer. My advice is to generally _not_ configure a special DNS server for virtual guests with direct IPv4 connectivity but use the DNS64-enhanced system from the IPv6 auto configuration.
+Normally, this has no drawbacks. We install the IPv4 connectivity only for _clients_ which need to connect to a service on the virtual machine via IPv4 - and this is the case with the configuration described above. Remember that the whole NAT64/DNS64 magic happens at the DNS layer. My advice is to generally _keep_ it this way and let the virtual machines use the address translation scheme for IPv4 connections anyway.
 
-There are exceptions to this rule, however. The most remarkable one is if the virtual machine becomes an e-mail server. In this case, it _must_ establish outgoing connections to IPv4 servers via IPv4 or otherwise its connections are blocked. We'll see how to handle this in the respective section.
+There are exceptions to this rule, however. The most remarkable one is if the virtual machine becomes an e-mail server. In this case, it _must_ establish outgoing connections to IPv4 servers via IPv4 or otherwise its connections are blocked. In such a case, exclude the server in the physical host's DNS configuration:
+
+.Exclude a virtual machine from DNS64 in /etc/bind/named.conf.options on the physical host
+----
+acl dns64clients {
+   !2a01:4f8:1:2:a:bc:579:a; # IPv6 address of virtual machine
+   # Add more if needed (with prepended "!")
+   [...]
+   any;  # Grant access for all others
+};
+
+options {
+        [...]
+        dns64 64:ff9b::/96 {
+                clients { dns64clients; };  # Refer to the ACL defined above
+        };
+};
+----
+
+If IPv4 enhancement and direct IPv4 access is the norm for your virtual machines, you may also define the access control list the other way around. See the <<sec-dns64-acl,section on DNS64 ACLs>>.
 
 
 ==== About IPv4 auto-configuration
@@ -247,4 +266,4 @@ ExecStart=/lib/systemd/systemd-networkd-wait-online --any
 
 * Run `systemctl daemon-reload` so that systemd uses your user-driven service configuration instead of the one from the maintainer.
 
-You're done! Rebooting the virtual machine should not be a question of seconds instead of minutes.
+You're done! Rebooting the virtual machine should now be a question of seconds instead of minutes.
