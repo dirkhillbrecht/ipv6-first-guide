@@ -1,0 +1,18 @@
+[[sec-programs]]
+== IPv6-only quirks of different programs or environments
+
+As IPv6-only environments are still rather few and far between, there are still programs or environments which might have problems with this setup.
+This section collects such minor quirks and how to cope with them
+
+[[sec-jre]]
+=== Java Runtime environment
+
+The Java Runtime Environment supports IPv6 for a long time now.
+Actually, they started supporting it in a time when IPv6 implementations were far from mature - being it in Java itself or in the operating system.
+To be able to supercede the IPv6-preference, the JRE got a property `java.net.preferIPv4Stack`. If this is set to `true`, Java always prefers IPv4 over IPv6 if both protocols were available for a connection.
+
+In a NAT64/DNS64 environment, this results in severe problems: For an IPv4-only host _and even for hosts reachable via both IP stacks_, the DNS64 server delivers _both_ the IPv4 and the (potential NAT64-routing) IPv6 address. Preferring IPv4 over IPv6 in such a case means trying to connect over the (unreachable) IPv4 path even though a working IPv6 route would be available. Connection errors and timeouts are the result.
+
+If your Java program has problems in the IPv6-only environment, check if this option is still set somewhere, e.g. as a `-D` option in the command line or in some options.
+Hopefully it is not compiled in.
+Remove it and connections should go through again, either via genuine IPv6 or via the NAT64 relay.

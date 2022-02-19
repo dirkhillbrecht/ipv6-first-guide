@@ -3,6 +3,7 @@
 [cols="^.^4,^.^3,<.^20",options="header"]
 |===
 |Date|Author|Changes
+|2022-02-19|dh|Add section on a <<sec-java,Java setting>> which may cause problems, some other minor changes
 |2021-05-19|dh|Add <<sec-dns64-acl,DNS64 access control>> description on the physical host, some minor changes
 |2021-03-21|dh|Add <<sec-firewall,firewall chapter>> with Shorewall and sshguard and cover <<sec-network-delay-systemd,systemd-networkd delay problem>> of virtual machines
 |2020-08-09|dh|Some updates on integration with web site and github, license added, preface rewritten
