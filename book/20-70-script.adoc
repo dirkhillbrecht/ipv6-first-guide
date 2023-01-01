@@ -1,0 +1,170 @@
+[[sec-install-kvm-host-script]]
+== `install-kvm-host.sh`: Install the physical host automatically
+
+As mentioned before, you can perform most parts of the installation of the physical host by the `install-kvm-host.sh` script which is included in the source code archive of this guide.
+
+=== The general process
+
+Currently, `install-kvm-host.sh` can only be used if
+
+* the target system is a Hetzner root server and
+* it has a freshly installed Ubuntu 22.04.
+
+In this case, generally perform the following steps:
+
+. Install the server with Hetzner's `installimage` script as described in the <<sec-initial-hetzner-setup,Initial setup of the host system at Hetzner's>> section.
+. Download the script from the github repository of the IPv6 First Guide (or clone the repo).
+. Copy it somewhere below root's home directory on the target server.
+. Execute the script as root on the target server.
+. Add the <<sec-physical-dns,DNS entries for the physical host>>.
+
+The script will perform all the steps described in the previous sections. The steps are grouped into three stages:
+
+. Prepare general environment and the networking settings of the physical host.
+. Install and configure Tayga, bind, and radvd.
+. Install libvirtd and finish the setup.
+
+In normal operation mode, `install-kvm-host.sh` will reboot the server between these stages to ensure a stable, predictable configuration.
+
+On the system I developed and tested the script, the stages needed the following time:
+
+//[cols="^.^1,^.^3",options="header"]
+[%autowidth,cols="^.^,^.^",options="header",align="center"]
+|===
+|Stage|Duration
+|1|~3,5 minutes
+|2|~1 minute
+|3|~5 minutes
+|===
+
+The main part of the time is actually spent downloading the needed packages. The configuring steps only need some seconds in each stage.
+
+My server also needed up to 7 minutes for each reboot. The reason for these delays is unknown. Hopefully this is special to that hardware.
+
+As the system reboots in between, the connection to the console is lost. The script logs all console output also to `/var/log/install-kvm.log` so that one knows what actually happened and whether any errors occurred.
+
+Currently, discovering the end of the script's operation is done by monitoring the server. If it has rebooted three times, the script has finished. If it has been successfull, there is neither a `/var/lib/install-kvm/config` nor a `/var/lib/install-kvm/stage` file. In any case, `/var/log/install-kvm.log` contains the output of all (executed) script stages and ends either in a success message or with an error message describing what went wrong.
+
+
+=== Operation modes
+
+`install-kvm-host.sh` has three operation modes:
+
+*normal interactive*:: After evaluating the command line parameters, a summary is shown. The script only continues after the user presses Return.
+*no reboot*:: The script performs as in normal interactive mode but does _not_ reboot automatically after each step. It's up to the user to do so and call the script manually after each reboot again. This allows to control the script's operation in each stage on the command line.
++
+The parameter `-nrb`, `--no-reboot` or `--noreboot` invokes the no reboot mode.
+*batch*:: The script does not wait for the user pressing Return but immediately starts the operation if the parameters are valid. This can be used in automated scenarios, e.g. execution by an Ansible scriptbook.
++
+The parameter `-b` or `--batch` invokes the batch mode.
+
+
+=== Optional operations
+
+Currently, `install-kvm-host.sh` knows about two optional operations:
+
+1. Setting the timezone: If a `-tz` or `--timezone` parameter is given (e.g. `-tz "Europe/Berlin"`, the script sets the time zone of the physical host in the first stage using the `timezonectl` command of systemd. Hetzner's `installimage` initializes the time zone always as UTC so it could make sense to correct this.
+
+2. Creating an additional user: If a `-l` or `--login` parameter is given (e.g. `-l dh`), An additional user is created at the end of the installation process. This user is added to the `libvirt` group and gets root's list of authorized ssh keys for login. If a `-n` or `--name` parameter is given (e.g. `--name "Dirk Hillbrecht"`), it will be used as the name of the user (otherwise the name is set to the login).
+
+
+=== How it works
+
+`install-kvm-host.sh` is a lengthy Bash script. It has some nice features which are described a bit more in depth here
+
+==== Continuation over a reboot
+
+To continue operation after a reboot, the script registers itself with the `atd` daemon and sets the execution time to "now". To prevent `atd` from executing the script _before_ the reboot actually happens, `install-kvm-host.sh` simply suspends `atd` before registration. The whole process goes like this:
+
+.Command sequence to continue the script after a reboot
+[source,shell]
+----
+myself=$(readlink $0)
+systemctl stop atd
+echo "$myself" | at now 2>/dev/null
+( sleep 5 ; reboot )&
+exit 0
+----
+
+On startup, `atd` is launched again, finds the command which is scheduled in the past (`now` at the moment of insertion) and executes it. `install-kvm-host.sh` finds the stage to continue with in `/var/lib/install-kvm/stage`.
+
+An important point is to carry the command line parameters over the reboot, too. This is done by writing the parameters as `export` statements into `/var/lib/install-kvm/config` and source this file at the beginning of all follow-up stages:
+
+.Parameter handling in first and follow-up stages
+[source,bash]
+----
+if [ "$currentstage" = "1" ]
+then
+  while [ -n "$1" ] ; do
+    case "$1" in
+    -l|--login) shift ; export login="$1" ;;
+    esac
+    shift
+  done
+  rm -f $conffile && touch $conffile
+  echo "export login=\"$login\"" >> $conffile
+else
+  . $conffile
+fi
+----
+
+
+==== Obtaining network parameters
+
+`install-kvm-host.sh` calls `ip` to read several network settings.
+However, it uses then JSON mode `ip -j` to get the information as a structured JSON document and parses it with the command line tool `jq`:
+
+.Reading network settings via ip and JSON
+[source,bash]
+----
+# returns the name of the network interface which has the public route
+publicInterface() {
+  ip -j route | jq '.[] | select(.dst=="default") | .dev' | sed 's/"//g'
+}
+----
+
+For YAML files, there is a similar tool `yq`:
+
+.Reading information from a YAML file
+[source,bash]
+----
+# Read the DNS forwarders from the Netplan configuration
+getForwarders() {
+  cat /etc/netplan/01-netcfg.yaml | \
+  yq -o y '.[] | .bridges.br0.nameservers.addresses')"
+}
+----
+
+Unfortunately, `yq` is not available as an Ubuntu/Debian `.deb` package in the distribution so far, so `install-kvm-host.sh` installs it directly from the `yq` distribution archive. As `yq` is written in Go, it is distributed as a self-contained binary.
+
+
+==== man-page generation
+
+`install-kvm-host.sh` contains its own man-page as an Asciidoc document. It can be generated by calling the script with the `--asciidoc` parameter. An Asciidoc processor creates the man page with its output. The `--help` parameter just calls `man $(basename $0)` or, if the man page has not been generated, directly emits the result of `$0 --asciidoc`:
+
+.Embedded man page
+[source,bash]
+----
+[ "x$1" = "x--asciidoc" ] && { cat <<EOA
+= `basename $0`(1)
+
+== NAME
+
+`basename $0` - Transforms a Hetzner root server into a KVM physical host with IPv6-first approach for the virtual machines.
+[...]
+EOA
+exit 0 ;
+}
+[ "x$1" = "x-h" -o "x$1" = "x--help" ] && { man `basename $0` || $0 --asciidoc | less ; exit 0 ; }
+----
+
+
+==== Output to log file
+
+`install-kvm-host.sh` uses `tee` to pass the standard output not only to the console, but also to `/var/log/install-kvm.log`. This is applied on the highest level function call so that all output of the executing functions is appropriately passed to all receivers.
+
+.Use tee for logging
+[source,bash]
+----
+performStage "$currentstage" | tee -a $logfile
+----

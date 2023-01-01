@@ -20,6 +20,10 @@ How can an IPv6-only virtual machine access an IPv4-only server?
 How can IPv4-only clients access services on the IPv6-only virtual machines?
 Are there services which definitely need an IPv4 address on a virtual host (spoiler: yes) and how do we attach them?
 
+Setting up the physical host is a rather complex process.
+This book is accompaigned by the bash script `install-kvm-host.sh` which performs all the basic steps on a Hetzner Online root server with Ubuntu 22.04.
+If you execute it, you can start installing virtual machines immediately afterwards.
+
 === License
 
 This guide is published under the _https://creativecommons.org/licenses/by-sa/4.0/[Creative Commons Attribution-ShareAlike 4.0 International license]_.
@@ -39,6 +43,11 @@ You may do so in any reasonable manner, but not in any way that suggests the lic
 
 Read more on https://creativecommons.org/licenses/by-sa/4.0/
 
+`install-kvm-host.sh` is free software:
+you can redistribute it and/or modify it under the terms of the http://www.gnu.org/licenses/[GNU General Public License] as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
 
 === Distribution
 
@@ -47,6 +56,8 @@ This guide is an Asciidoc document. It is hosted on Github and can be read onlin
 HTML version:: https://ipv6-first-guide.hillbrecht.de[]
 PDF version:: https://ipv6-first-guide.hillbrecht.de/ipv6-first-guide.pdf[]
 Asciidoc sources:: https://github.com/dirkhillbrecht/ipv6-first-guide[]
+
+`install-kvm-host.sh` is distributed together with the Asciidoc sources in the github repository.
 
 
 === About the author

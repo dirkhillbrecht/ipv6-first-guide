@@ -19,3 +19,5 @@ Depending on this external setup, configuration can be quite different between i
 include::20-20-onenetwork.adoc[]
 
 include::20-50-kvm.adoc[]
+
+include::20-70-script.adoc[]

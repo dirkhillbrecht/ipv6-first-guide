@@ -5,6 +5,8 @@ It follows an "IPv6-first" approach.
 I.e. all systems are setup with IPv6 being the only mandatory IP protocol.
 IPv4 is only added to reach services on virtual machines for clients which still do not have IPv6 connectivity.
 
+The repository also contains the script `install-kvm-host.sh` which applies the basic steps to bring up the KVM hypervisor automatically. Currently, it runs only on root servers of the German hosting provider Hetzner Online with Ubuntu 22.04 as base.
+
 This repository contains the Asciidoc sources for the book.
 Read it online:
 

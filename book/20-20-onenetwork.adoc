@@ -243,6 +243,40 @@ If you make mistakes in the host's network configuration, you will need the resc
 ====
 
 
+=== Continue using the `install-kvm-host.sh` script
+
+This guide features the script `install-kvm-host.sh` which performs all steps following in this section on a Hetzner root server with a freshly installed Ubuntu 22.04. You may now fast forward to <<sec-install-kvm-host-script,the description of `install-kvm-host.sh`>> to learn how to use it.
+
+If any problems arise, you can go back to the following chapters to sort things out as the script really only performs the actions described here in the next sections.
+
+If you want to do things on your own, if you work with another installation than Ubuntu 22.04 or if you are not on a Hetzner root server, read on to perform the setup steps manually.
+
+
+=== Check preconditions on the server
+
+You should check that the system supports virtualisation at all. Issue
+
+----
+egrep -c '(vmx|svm)' /proc/cpuinfo
+----
+
+and verify that the result is greater then 0. Then, apply
+
+----
+apt install cpu-checker
+kvm-ok
+----
+
+and check that the result is
+
+----
+INFO: /dev/kvm exists
+KVM acceleration can be used
+----
+
+If not, the BIOS settings of the system must be corrected. Contact the hosting provider to sort that out.
+
+
 === Put /tmp into a ramdisk
 
 One thing which is totally independent from IPv6 and KVM is the `/tmp` directory.
@@ -507,6 +541,8 @@ Investigate. Repeat until it works...
 
 
 === Change IPv6 address
+
+NOTE: This step is _not_ performed by `install-kvm-host.sh`.
 
 You might think about changing the IPv6 address of the physical host.
 The Hetzner provider configures them always having `0:0:0:2` as address.
