@@ -1,7 +1,7 @@
 [[sec-programs]]
 == IPv6-only quirks of different programs or environments
 
-As IPv6-only environments are still rather few and far between, there are still programs or environments which might have problems with this setup.
+As IPv6-only environments are still rather few and far between, there remain programs or environments which might have problems with this setup to this day.
 This section collects such minor quirks and how to cope with them
 
 [[sec-jre]]

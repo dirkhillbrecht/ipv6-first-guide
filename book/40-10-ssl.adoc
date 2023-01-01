@@ -1,21 +1,21 @@
 == SSL certificates with Let's Encrypt
 
-Today's internet requires encrypted connections for any serious web service.
-Encrypted connections require certified encryption keys.
-Such certificates must be issued by a trusted certificate provider.
-"Let's encrypt" is such a provider which grants the certificated for free.
-
 .This chapter is not polished so far
 WARNING: This chapter still work at progress at some points.
 While the overall scheme works reliably, there are still rough edges.
 As SSL connections are crucial for all other services and Let's encrypt is a very good source for them, I released this guide nevertheless.
 Feel free to use other schemes or resources for your certificates or help increasing the quality of this chapter.
 
+Today's internet requires encrypted connections for any serious web service.
+Encrypted connections require certified encryption keys.
+Such certificates must be issued by a trusted certificate provider.
+"Let's encrypt" is such a provider which grants the certificates for free.
+
 === The basic idea
 
 Lets recap shortly how SSL works:
 
-* You have a _secret key_ on your (web) server which you use to setup encrypted connections with clients.
+* You have a _secret key_ on your (web) server which to setup encrypted connections with clients.
 
 * You have a _certificate_ from a 3rd party which confirms that this key is actually yours and which contains information a client needs to encrypt messages your secret key can decrypt (and vice versa).
 
@@ -30,9 +30,9 @@ To issue a valid certificate, it must answer two questions positively:
 
 . Is the key really your key?
 This problem is solved cryptographically by so-called "certificate signing requests (CSRs)".
-They guarantee cryptographically that the issued certificate can only be used with the key they are created for.
+They guarantee cryptographically that the issued certificate can only be used with the key it is created for.
 
-. Are you really you?
+. Is it really you?
 For long time, this was the way more difficult problem as there were no simple technical ways to determine that someone is really the person they claim.
 
 Let's encrypt, however, uses a completely automatable workflow which is based on so-called challenges. The protocol and scheme are called "ACME" and work this way:
@@ -58,20 +58,20 @@ Its challenge is rather simple:
 
 . You: Hey, Let's encrypt, please certify my key for www.example.org.
 
-. Let's encrypt: Sure. Please put a file /some-path/<unpredictable random name> on www.example.org.
+. Let's encrypt: Sure. Please put a file `/some-path/<unpredictable random name>` on `www.example.org`.
 
-. You: <Create the file> Done!
+. You: _(Creates the file)_ Done!
 
-. Let's encrypt: Get http://www.example.org/some-path/<unpredictable random name>. Found it! Great. Here's your certificate.
+. Let's encrypt: _(Connects to `www.example.org` and GETs `/some-path/<unpredictable random name`)_ Found it! Great. Here's your certificate.
 
-. You: Thanks. <Copy key and certificate into web servers SSL key store>
+. You: Thanks. _(Copies key and certificate into web server's SSL key store)_
 
 The very nice thing about this scheme is that the Let's-Encrypt server, the Let's-Encrypt client `certbot` and your web server can handle out this all on their own.
 `certbot` knows how to configure a local Apache so that it serves the file which the Let's Encrypt server wants to see.
 There are even web servers like https://caddyserver.com/[Caddy] which have this scheme already built-in.
 
 However, for the mixed IPv4/IPv6 setups, this scheme has some shortcomings.
-It can only be performed on the virtual machine, as only there the web server can change the contents it server in accordance with the Let's encrypt certificate request tool.
+It can only be performed on the virtual machine, as only there the web server can change the contents it serves in accordance with the Let's encrypt certificate request tool.
 While this would work consistently as Let's encrypt explains on https://letsencrypt.org/docs/ipv6-support/[], the key has to be copied to the IPv4 proxy server.
 Otherwise, encrypted IPv4 connections are not possible.
 If for any reason the IPv6 web server is unresponsive and Let's encrypt falls back to IPv4, the challenge fails and the certificate is not issued.
@@ -82,35 +82,35 @@ All in all, I decided against this scheme for all my domains.
 === DNS-based challenge and wildcard certificates
 
 In my setup, I use a certificate for _any_ name below `example.org`.
-Such a _wildcard certificate_ is expressed as `*.example.org` and allows to use the certified key for everything below the domain name, e.g. www.example.org, smtp.example.org, imap.example.org and anything else.
+Such a _wildcard certificate_ is expressed as `*.example.org` and allows to use the certified key for everything below the domain name, e.g. `www.example.org`, `smtp.example.org`, `imap.example.org` and anything else.
 
 For such wildcard certificates, the HTTP-based challenge is not sufficient.
 You have to prove that you not only control _one name_ in the domain, but the _complete_ domain.
 Fortunately, there is a way to automate even this: The DNS entries of the domain.
 
-Obtaining a certificate for `*.example.org` works with the following dialog:
-
-. You: Hello Let's encrypt, please certify my key for example.org.
-
-. Let's Encrypt: Ok, please set the String "<long random String>" as TXT record in the DNS domain as _acme-challenge.example.org
-
-. You: <Change the DNS entries> Here you are!
-
-. Let's Encrypt: <Performs DNS query> Great. Here's your certificate.
-
-. You: Thanks. <Copy key and certificate where they are needed>
-
-This works perfectly. 
-There is one tiny problem:
-The DNS entries have to be changed.
-And there is no general scheme how this can be automatized with the usual DNS server system.
-Many providers do only offer a web-based interface for editing or have defined a proprietary interface for changes to the DNS entries.
-And such interfaces tend to give very much power to the caller.
-
 .DNS-based challenge for non-wildcard certificates
 NOTE: Of course, you can use DNS-based challenges also for certificates with specific names only.
 As you'll see, our keys will actually be certified for `*.example.com` _and_ `example.com`.
 Wildcard certificates simplify the management a bit as they are immediately useable for any new names in a domain.
+
+Obtaining a certificate for `*.example.org` works with the following dialog:
+
+. You: Hello Let's encrypt, please certify my key for `*.example.org`.
+
+. Let's Encrypt: Ok, please set the String "<long random String>" as TXT record in the DNS domain as `_acme-challenge.example.org`
+
+. You: _(Changes the DNS entries)_ Here you are!
+
+. Let's Encrypt: _(Performs DNS query)_ Great. Here's your certificate.
+
+. You: Thanks. _(Copies key and certificate where they are needed)_
+
+This works perfectly. 
+There is one tiny problem:
+The DNS entries have to be changed.
+And there is no general scheme how to automate this with the usual DNS server system.
+Many providers do only offer a web-based interface for editing or have a proprietary interface for changes to the DNS entries.
+And such interfaces tend to give very much power to the caller.
 
 === DNS rerouting
 
@@ -121,8 +121,8 @@ Such a server exists, it is the "ACME-DNS" server on https://github.com/joohoi/a
 But this server runs on its own name which might even be in a totally different domain, e.g. `acme-dns.beispiel.de`.
 
 And here comes the final piece:
-The domain `example.org` gets a _static_ `CNAME` entry pointing `_acme-challenge.example.com` to a a DNS entry in `acme-dns.beispiel.de`.
-Only that entry is the requested TXT record Let's Encrypt's certification server checks for the certificate validation.
+The domain `example.org` gets a _static_ `CNAME` entry pointing `_acme-challenge.example.com` to a DNS `TXT` record in `acme-dns.beispiel.de`.
+And _that_ entry is the required `TXT` record Let's Encrypt's certification server checks for the certificate validation.
 
 The complete scheme with ACME, ACME-DNS and all the routing steps becomes rather elaborate:
 
@@ -161,12 +161,12 @@ le -> you : Ok, challenge passed. Here is your certificate.
 @enduml
 ....
 
-This scheme finally allows to fully automatically obtain and manage Let's-Encrypt-certified SSL keys.
+This scheme finally allows to automatically obtain and manage Let's-Encrypt-certified SSL wild card keys.
 And full automatism is important for the whole Let's Encrypt scheme as the issued certificates only have rather short validity time ranges:
-They are always only valid for 90 days and can be renewed from day 60 of their validity on.
+They are only valid for 90 days and can be renewed from day 60 of their validity on.
 So, each certificate is renewed four to six times per year!
 
-Especially when the number of certificates becomes larger, a manual process will be really, really tedious.
+Especially when the number of certificates becomes larger, a manual process is really, really tedious.
 
 
 === Set up the whole process
@@ -180,7 +180,7 @@ We setup the following scheme:
 In my original installation, I chose the physical host as the hub for this scheme.
 While there is nothing wrong with that technically, it contradicts the rule not to run any unnecessary services at the physical host.
 
-However you do it, first thing you need is the certificate robot `certbot`. In Ubuntu 18.04 and 20.04, the included one is sufficient, so installation is a simple `apt install certbot`.
+However you do it, first thing you need is the certificate robot `certbot`. In all Ubuntu versions covered here, the included one is sufficient, so installation is as simple as `apt install certbot`.
 
 .About standards and implementations
 NOTE: Technically, it is not 100% correct to say you need "certbot" to communicate with "Let's encrypt".
@@ -254,7 +254,7 @@ So, now you have to edit your domain data and add this CNAME.
 .DNS entry for the ACME-DNS CNAME in NamedManager
 image::pics/acme-dns-cname.png[align="center", width="500%", scalewidth="15cm"]
 
-After this entry has been added and spread through the DNS, let certbot continue.
+After the entry has been added and spread through the DNS, let certbot continue.
 
 Only at this first certification process, manual interaction is needed. After that, `certbot` can, together with `acme-dns-auth.py`, handle the whole process automatically. You can see the setup in `/etc/letsencrypt/renewal/example.com.conf`.
 
@@ -268,30 +268,29 @@ Certbot puts the currently valid keys certificates for a domain into a directory
 My suggestion is to run Certbot in a centralized way on one machine (in my current setup: the physical host) and copy _the complete directory with certbot's keys and certificates_ onto all machines which need one of the certificates.
 
 Note that you need the certificates for all your web servers not only on the virtual machine where the web site runs, but also on the physical host which is responsible for the incoming IPv4 connections to the site.
-It helps to prevent errors if you just copy the complete data set onto both machines at the same place.
+It helps to prevent errors if you just copy the complete data set onto all machines at the same place.
 
-So ,just copy the `/etc/letsencrypt` directory to all virtual machines, do not install `certbot` there.
+So, just copy the `/etc/letsencrypt` directory to all virtual machines, do not install `certbot` there.
 
 
 === Planned extensions and corrections
 
-From all services describes in this guide, the Let's Encrypt setup is the least consolidated one.
+From all services described in this guide, the Let's Encrypt setup is the least consolidated one.
 There are some elements missing to make it really polished:
 
 * `certbot` should run on a dedicated virtual machine and not on the physical host.
-Implementing it this way was mainly due to experimenting with the whole setup.
+Implementing it this way was mainly due to me experimenting with the whole setup.
 
 * ACME-DNS should use its own server. I would place it on the same virtual machine where `certbot` runs.
-This was, that special DNS server would only be accessible via IPv6, but the docs say, this is no problem any more in 2020.
+This way, that special DNS server would only be accessible via IPv6, but the docs say, this is no problem any more in the 2020s.
 
 * The copying process must be enhanced.
 Currently, `certbot` is run by root which is not the best idea of all.
 There should be a dedicated `certbot` account which runs Certbot and is allowed to copy Certbot's directory to the other machines.
-So far, copying the certificates is still a step which is not completely automatized in my setup.
 
 * Some mechanism must restart the services after the new certificates have been rolled out.
 Currently, the certificate renewal happens somewhen between 30 and 22 days before the old certificate expires.
-Often, system reboots due to automatic updates restart the Apaches or the e-mail services in time.
+Often, automatic updates (and reboots) restart the Apache or the e-mail services in time.
 This is not guaranteed, however.
 
 Taking all this into consideration, this section of this guide is the clearest candidate for a larger rewrite.

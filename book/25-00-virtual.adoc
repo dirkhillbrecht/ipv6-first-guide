@@ -1,3 +1,4 @@
+[[sec-virt-machines]]
 = The virtual machines
 
 // NO_LIBRARY

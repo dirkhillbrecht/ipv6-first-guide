@@ -1,6 +1,6 @@
 == Testing IPv4 connectivity from an IPv6-connected host
 
-If you work with this setup, you usually will have an IPv6-connected workstation so that you can access your virtual machines without any proxying.
+If you work with this setup, you will usually have an IPv6-connected workstation so that you can access your virtual machines without any proxying.
 That makes it a bit complicated to actually test the IPv4 connectivity of services as IPv6 is by definition always the preferred protocol - if it is available.
 
 At least on Linux systems, switching off IPv6 for testing purposes is not difficult, fortunately:
@@ -21,7 +21,7 @@ To reenable IPv6, perform the following steps:
 The advertisments should arrive within some short time frame but depending on your general setup,
 you might need to shutdown and restart your network devices for that.
 
-Some services holding IPv6 connections on the system could not behave well if they get cut off their network connectivity so harshly.
+Some services holding IPv6 connections on the system might not behave well if they get cut off their network connectivity so harshly.
 If restarting them does not help, you might need to reboot the system to get everything in order again.
 Fortunately, just performing some `echo` commands to `/proc` files is a volatile operation.
-After a reboot, everything about turning off IPv4 this way will be forgotten.
+After a reboot, everything about turning off IPv4 this way is forgotten.

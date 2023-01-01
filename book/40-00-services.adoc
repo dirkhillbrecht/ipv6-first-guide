@@ -3,25 +3,24 @@
 // NO_LIBRARY
 
 So far, we have described how to setup the basic operating systems for physical host and virtual machines.
-Usually, systems are installed to run services.
+Usually, servers are installed to run services.
 
-The whole idea of a virtualized server setup is to use the physical host for almost nothing and run all services _in the virtual machines_.
+The whole idea of a virtualized setup is to use the physical host for almost nothing and run the services _in the virtual machines_.
 So, if not explicitly stated otherwise, the following instructions _always_ assume that you work on a virtual machine.
 
 Having IPv6-centric - or ideally IPv6-only - virtual machines, running serices on them brings one or the other interesting configuration detail.
 In the following chapters of this guide, we look at a number of different services and describe these details.
 
-.Don't be shy about adding yet another virtual machine
-[NOTE]
-====
-A tremendous advantage of the setup described here is that installing another virtual machine is _really cheap_! You do not need to care about scarce IP addresses - with IPv6 you literally have as many as you want! Also, virtualized servers are quite lean these days, it does not really matter if you have three services in three virtual machines or in one - or on the bare metal.
+Perhaps the most important key concept for working with a setup like this is: *Don't be shy about adding yet another virtual machine!*
 
-So, use virtual machines as your default way of doing things! Install your services in different machines if you want to seperate them. One service wants a special operating system environment? No problem, just put it into its own virtual machine! You can really easily seperate things this way.
+A tremendous advantage of the setup described here is that installing another virtual machine is _really cheap_! You do not need to care about scarce IP addresses - with IPv6 you literally have as many as you want! Also, virtualized servers are quite lean these days, it does not really matter if you have three services in three virtual machines or in one - or on bare metal.
+
+So, use virtual machines as your default way of doing things! Install your services in different machines if you want to separate them. One service wants a special operating system environment? No problem, just put it into its own virtual machine!
 
 And if you find out that a service is not needed any more - no problem. Just shut down the virtual machine and it is gone. Delete it - and the service will never come back. You totally garbled the configuration? Delete the virtual machine and start over.
 
 Virtualisation makes administation of services remarkably more flexible than having "everything in the same environment".
-====
+
 
 include::40-10-ssl.adoc[]
 

@@ -1,12 +1,14 @@
 == E-mail server
 
+NOTE: I have implemented this only with Ubuntu 18.04 so far so this section is not updated to Ubuntu 22.04 yet. Reports on how it works with newer systems are welcome.
+
 When it comes to a complete personal internet services setup, the single most important service is probably e-mail. It is crucial for many different tasks:
 
 * Of course, sending and receiving information to and from other people.
 * Having a base for the other services to verify or re-verify authentication - ever tried to reset a password to a service without an e-mail account?
-* Getting information about the health of the own systems or confirmation messages of automatic tasks.
+* Getting information about the health of the own systems or confirmation messages from automatic tasks.
 
-E-mail _is_ important. The question is: Host yourself or use a service? To be clear: Hosting an e-mail server yourself these days is not a simple task. There is a plethora of - more or less clever - schemes against spamming and fraud and if your server does not follow them, it is quite likely that outgoing messages will simply be blocked or even thrown away by other systems. If you mess up your setup, the same could accidentially happen to incoming messages. And unfortunately, you will not find a tool which you install out of the box so that you just "have" a mail server. You have to configure multiple programs so that they play nicely together.
+E-mail _is_ important. The question is: Host yourself or use a service? To be clear: Hosting an e-mail server yourself is not a simple task. There is a plethora of - more or less clever - schemes against spamming and fraud and if your server does not follow them, it is quite likely that outgoing messages will simply be blocked or even thrown away by other systems. If you mess up your setup, the same could accidentially happen to incoming messages. And unfortunately, you will not find a tool which you install out of the box so that you just "have" a mail server. You have to configure multiple programs so that they play nicely together.
 
 The advantages, however, are obvious: It's your own e-mail on your own server. You are not bound to any storage capacities you have to pay for. You can configure the services as you like. If you misconfigure them, it's your fault and only your fault.
 
@@ -19,11 +21,11 @@ NOTE: It is remarkable how small the amount of IPv6 e-mail traffic actually seem
 
 === Basic server and network setup
 
-So, here we are. Start with bringing up a fresh virtual machine as described before. I gave my e-mail server a virtual harddisk of 250 GB - of which 60 GB are currently used. It has 6 GB of main memory. This is rather a lot, but in my setup, there are 64 GB of physical memory in the host. It is no problem...
+So, here we are. Start with bringing up a fresh virtual machine <<sec-virt-machines,as described above>>. I gave my e-mail server a virtual harddisk of 250 GB - of which 60 GB are currently used. It has 6 GB of main memory. This is rather a lot, but in my setup, there are 64 GB of physical memory in the host. It is no problem...
 
-Perform all steps so that you have your e-mail server-to-be accessible from outside via IPv6 *and IPv4* ssh connections with appropriate DNS entries in your domain.
+<<sec-add-ipv4,Perform all steps>> so that you have your e-mail server-to-be accessible from outside via IPv6 *and IPv4* ssh connections with appropriate DNS entries in your domain.
 
-After having the server prepaired on network and system level, it is time to actually setup the mail system. And here I must admit, that I have _not_ developed my own scheme. Instead, I followed https://thomas-leister.de/en/mailserver-debian-stretch/[]. While it uses Debian stretch as base, I also had no problem following it on Ubuntu 18.04.
+After having the server prepared on network and system level, it is time to actually setup the mail system. And here I must admit, that I have _not_ developed my own scheme. Instead, I followed https://thomas-leister.de/en/mailserver-debian-stretch/[]. While it uses Debian stretch as base, I also had no problem following it on Ubuntu 18.04.
 
 Thomas describes a contemporary e-mail server setup. The server allows for incoming and outgoing traffic. It is setup according to all anti-spam requirements with DKIP, DMARC and SPF entries in DNS. It offers SMTP and IMAP access for clients. It is a multi-user multi-domain setup. I run this since late 2018 without any problems.
 
@@ -32,14 +34,14 @@ Thomas describes a contemporary e-mail server setup. The server allows for incom
 
 Using Thomas' description is very straight forward. However, I'd like to add some notes.
 
-First and foremost, it helped me tremendously to understand that you should use a _totally unrelated_ domain for the mail server - especially, if you plan to serve multiple domains on it. Let's assume you want to serve `example.net` and `example.com` e-mail on your server. My advise to setup this:
+First, it helped me tremendously to understand that you should use a _totally unrelated_ domain for the mail server - especially, if you plan to serve multiple domains on it. Let's assume you want to serve `example.net` and `example.com` e-mail on your server. My advise to setup this:
 
 * Obtain `beispiel.de` as an independent domain _only for e-mail_. For my own setup, I obtained a `.email` domain. It costs a bit more than a simple `.de` domain, but it's really nifty...
 * Use this domain as primary domain in the https://thomas-leister.de/en/mailserver-debian-stretch/[setup documentation].
 * Let the main e-mail name server, usually `mx0.beispiel.de`, have `A` and `AAAA` DNS entries. After all, this setup works for _both_ IP address spaces.
 * Point the `MX` entry for _any_ domain you want to serve on your server to that `mx0.beispiel.de`. Remember - the MX for a domain _can be in any domain_!
 * After having setup the DNS for the first "real" domain, say `example.net`, you can simply copy SPF, DMARC, and DKIP entries from that domain to `example.com` and whichever other domain you want to serve.
-* Add the IPv4 addresses and the IPv6 network of the whole server to the `mynetworks` list in `/etc/postfix/main.cf`. That makes your mailserver a smart host for all other servers. So, every of your virtual servers - and even the physical machine - can send e-mail without any further setup steps. You just have to add the mail server as smart host (or forwarding host) for all outgoing e-mail.
+* Add the IPv4 addresses and the IPv6 network of the whole server to the `mynetworks` list in `/etc/postfix/main.cf`. That makes your mailserver a smart host for all other servers. So, every of your virtual servers - and even the physical machine - can send e-mail without any further setup steps. You only have to add the mail server as smart host (or forwarding host) for all outgoing e-mail.
 * Regarding the DNS setup of the mail server itself: This virtual machine _must not_ use the DNS64/NAT64 setup of the physical host! This server is fully connected to IPv4, so it can reach all IPv4 servers directly. And it _must_ do so, otherwise outgoing IPv4 connections would come from the "wrong" IPv4 address and the whole anti-spam mayhem would start again. The https://thomas-leister.de/en/mailserver-debian-stretch/[mail server setup instructions] suggest to install a small DNS server on the mail server itself. Just follow that instructions and you're done. If you use the DNS server of the physical host, be sure to exclude this virtual machine from DNS64 by <<sec-dns64-acl,editing the access control list>> appropriately!
 
 Setting things up like this makes the further DNS setup rather simple: All your mail clients connect to the dedicated mail server domain, in the example `mx0.beispiel.de`, _also those_ for `example.net`, `example.com` or whatever. This way, you only need SSL certificates for the mail domain.
@@ -48,13 +50,13 @@ Setting things up like this makes the further DNS setup rather simple: All your 
 
 Two things are _absolutely crucial_ regarding the name service setup of the mail server:
 
-. The DNS and reverse DNS entries for the mail exchange server must be consistent! The `A` and `AAAA` record for `mx0.beispiel.de` must both point to the virtual server in your setup _and the `PTR` reverse entries of the IP addresses must point back_ to `mx0.beispiel.de`. This is the main reason why we need that additional IPv4 address and why I strongly recommend to use a dedicated domain for this. If you fail in this setup step, you will have massive problems with outgoing e-mail being spamblocked (and noone willing to help you...).
+. The DNS and reverse DNS entries for the mail exchange server must be consistent! The `A` and `AAAA` record for `mx0.beispiel.de` must both point to the virtual server in your setup _and the `PTR` reverse entries of the IP addresses must point back_ to `mx0.beispiel.de`. This is the main reason why we need that additional IPv4 address and why I strongly recommend to use a dedicated domain for this. If you make a mistake here, you will have massive problems with outgoing e-mail being spamblocked (and noone willing to help you...).
 
-. It is also important that the `myhostname` setting in `/etc/postfix/main.cf` must contain the full qualified domain name of that mail server, i.e. `mx0.beispiel.de` in this example. The whole mail server is mainly known in DNS by its mail domain name.
+. It is also important that the `myhostname` setting in `/etc/postfix/main.cf` contains the full qualified domain name of that mail server, i.e. `mx0.beispiel.de` in this example. The whole mail server is mainly known in DNS by its mail domain name.
 
 === Setup of mail clients
 
-As I already explained, the mail domains which are hosted on the system can have _totally different names_! There are also no `PTR` records needed. For each mail domain, the following steps must be done:
+As I already explained, the mail domains which are hosted on the system can have _totally different names_! There are also no `PTR` records needed. Each mail domain must match the following conditions:
 
 * An MX entry in DNS must exist and point to `mx0.beispiel.de`.
 

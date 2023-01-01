@@ -1,3 +1,4 @@
+[[service-webserver]]
 == Web server
 
 I won't describe how to set up and configure an Apache or Nginx web server.
@@ -10,15 +11,15 @@ Of course, you can say: "I don't care. People should use IPv6 or they miss the s
 If you do that, you're done. The server works as expected and everything works as long as all connections can be established via IPv6.
 
 Unfortunately, things are not that simple in many cases.
-There are still many installations which have only IPv4 connectivity, even in 2020.
+There are still many installations which have only IPv4 connectivity, even in 2022.
 Even if a network is connected via IPv6, it does not mean that every device can use the protocol.
-E.g. many microcontrollers (like the ESP 8266) do only have an IPv4 procotol stack implemented.
-So, an IPv6-only web server is in itself no problem but even in 2020 it will not be generally reachable.
+E.g. many microcontrollers or legacy devices do only have an IPv4 procotol stack implemented.
+So, an IPv6-only web server is in itself no problem but even in 2022 it will not be generally reachable.
 
 On the other hand, the whole idea behind this setup is to have IPv6-only virtual machines.
 It does not help if we have an IPv6-only setup - only to add IPv4 connectivity to each machine due to the services running on them.
 
-Fortunately, for HTTP-based services, there is an elegant solution to this problem: We use a relay which takes IPv4 traffic and forwards it to the IPv6 machine. To be more precise: We use our physical host to relay incoming IPv4 connections to the servers on its virtual machine(s) with a web server configured as reverse proxy. This way, we _split_ incoming connections on different servers based on the protocol:
+Fortunately, for HTTP-based services, there is an elegant solution to this problem: We use a relay which takes IPv4 traffic and forwards it to the IPv6 machine. To be more precise: We use our physical host to relay incoming IPv4 connections to the servers on its virtual machine(s) with a web server configured as _reverse proxy_. This way, we _split_ incoming connections on different servers based on the protocol:
 
 * IPv6 clients do connect directly to the web server on the virtual machine.
 * IPv4 clients do connect to the physical host via IPv4 which forwards the connection to the virtual machine via IPv6
@@ -86,7 +87,7 @@ This way, the appropriate name resolution is performed for each protocol and lea
 
 ==== CNAME entries
 
-The direct approach is very straight forward but has some drawbacks.
+The direct approach is very straight forward but has a drawback:
 You do not see on first sight that these addresses are somehow "special" in that they point to different servers depending on the protocol.
 And, of course, if for any reason the IP address changes, it must be changed for all entries individually.
 
@@ -153,11 +154,11 @@ Create the configuration, e.g. in `/etc/apache2/sites-available/testsite.conf`:
 </IfModule>
 ----
 
-Enable the website using `a2ensite testsite.conf`. Now, it is available via IPv6.
+Enable the website using `a2ensite testsite.conf`. Now, it is available via IPv6. Note that this is more or less the "normal" setup of an Apache-served website.
 
-=== Setup the IPv4 proxy on the physical host
+=== Setup the IPv4 reverse proxy on the physical host
 
-Install apache also here. You have to enable the proxy modules additionally to SSL and rewrite using `a2enmod ssl rewrite proxy proxy_http`.
+Install apache on the physical host, too. You have to enable the proxy modules additionally to SSL and rewrite using `a2enmod ssl rewrite proxy proxy_http`.
 
 Create the site configuration, also in `/etc/apache2/sites-available/testsite.conf`:
 

@@ -2,9 +2,52 @@
 
 You can install any operating system which is capable of running in a virtualized setup. Of course, it _must_ be able to use IPv6 and it _should_ be able to auto-configure its network settings via SLAAC. Fortunately, all modern operating systems support such setups nowadays.
 
+One very nice thing about virtualisation is that you can install the operating system in the virtual machine _just as if you sat in front of the machine's console_. KVM virtualisation and virt-manager forward a (virtual) keyboard, mouse and screen so that you can interact with the system even when it has no internet connection - which is the usual situation during the initial installation of the operating system. This makes you completely independent of the hosting provider and allows you to install _any_ operating system in your virtual machine (as long as it supports IPv6 and SLAAC).
+
+=== Ubuntu 22.04
+
+In this section, I give some advises for the Ubuntu 22.04 installer. Note that Ubuntu has changed the installer completely compared to Ubuntu 20.04 so the menu is much different.
+
+* Select the language for the installed system. I often go for "English" to have error messages and general dialogs in the most common locale. Note that you can change the main locale settings even after installation using `dpkg-reconfigure locales`.
+* The installer might offer a newer version of itself. I suggest to go for it. The following documentation is for version 22.12.1 of the installer.
++
+.Subiquity in-installation upgrade
+image::pics/subiquity-update.png[align="center",width=80%,scalewidth=10cm]
++
+Note that upgrading the installer at this point already uses the internet connection of the virtual machine. And as the download server is an IPv4-only-connected Github system, this even includes NAT64 and DNS64. If this update succeeds, you can assume radvd, bind, tayga, and the network bridge to work correctly.
+* The choice of the keyboard should reflect the actual physical keyboard you are typing on.
+* I use the "normal" Ubuntu Server, not the minimized version, as I intend to login on my virtual machines.
+* Installation of SLAAC-driven IPv6 networks cannot be selected explicitly with the current version of Subiquity.
+I suggest not to change the settings here, so to keep IPv4 to "DHCP" and IPv6 to "disabled". IPv6 SLAAC auto-negotiation will be performed nevertheless. Note that you must not disable _both_ protocols as the whole network interface will be disabled then.
+* No proxy needed.
+* In Hetzner's network, use `http://mirror.hetzner.de/ubuntu/packages` as download server address.
+* You can use the entire disk as installation target, and I suggest to disable the LVM feature here. Note that if you configured your physical host with a (software) RAID setup, the virtual machine will benefit from this, too, as its (virtual) harddisk is actually a file on this RAID.
+* After installation start and selection of a user name, the installer asks if it should install an ssh server. I stongly suggest to do so! Without ssh, you can only access the system via the virtual console - and that just does not make too much fun.
+* In the installation progress screen, you can switch to "View full log" at the bottom of the screen to see what's happening on the virtual machine. Especially "downloading and installing security updates" might take some time, depending on the age of your installation image.
++
+.Installation of security updates in Subiquity
+image::pics/subiquity-final-steps.png[align="center",width=80%,scalewidth=10cm]
++
+Wait for this step to finish, otherwise your installation will not be complete!
+
+If you install the system from the "Create virtual machine" screen, the install ISO image will be removed from the boot device sequence of the virtual machine automatically. However, if you installed the system into an already existing virtual machine, you have to do that yourself. This change will only be applied if you turn off the virtual machine completely and restart it from scratch (e.g. in virt-manager). _Rebooting the operating system within the virtual machine is not enough!_
+
+Subiquity writes an extremly stripped down Netplan configuration into `/etc/netplan/00-installer-config.yaml`. It contains no information about IPv6 autoconfiguration; it seems that SLAAC is always performed, even if not explicitly mentioned. If you left the default network settings as they were, however, there is a line enabling DHCP for IPv4. I suggest to disable this by setting it to `false`. Note that you should _not_ remove all lines completely as there must be at least one entry for an active network device in the Netplan configuration.
+
+.Suggested Netplan configuration in a Ubuntu 22.04 virtual machine
+----
+# 'subiquity' network config, changed for IPv6-only hosts
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      dhcp4: false
+----
+
+
 === Ubuntu 20.04
 
-We're now at a stage where you can install any operating system which is installable in KVM virtual machines. I give some advises for the Ubuntu 20.04 network installer:
+For Ubuntu 20.04, I advise these steps:
 
 * Install by simply pressing the "Install" button. I never needed any additional kernel parameters.
 * Select correct keyboard or it will drive you nuts.
@@ -43,12 +86,6 @@ Check if you have the <<sec-network-delay-systemd,network setup delay problem>> 
 
 Ubuntu 18.04 is installed exactly the same way as Ubuntu 20.04.
 
-=== Ubuntu 16.04
-
-Ubuntu 16.04 is installed almost exactly the same way as Ubuntu 20.04. The only difference is that Ubuntu 16.04 still uses `systemd-networkd` for network configuration.
-Therefore, its network settings are located at a different place and also differ syntactically.
-However, as with the more modern cousins, you do not have to change anything manually due to the autoconfiguration.
-
 === Windows 10
 
 Windows "just works" when installed in an IPv6-only virtual machine.
@@ -56,4 +93,4 @@ It takes all the advertisements from `radvd` and configures its network appropri
 The result is a Windows which has no IPv4 network aprt from the auto-configured one.
 
 .Windows 10 with IPv6-only connectivity
-image::pics/Win10-IPv6-only.png[align="center",width=300%,scalewidth=10cm]
+image::pics/Win10-IPv6-only.png[align="center",width=40%,scalewidth=10cm]

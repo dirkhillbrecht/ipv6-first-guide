@@ -3,6 +3,7 @@
 [cols="^.^4,^.^3,<.^20",options="header"]
 |===
 |Date|Author|Changes
+|2022-12-31|dh|Cover Ubuntu 22.04, add <<sec-install-kvm-host-script,KVM host installation script>> with automation of all base steps, remove references to Ubuntu 16.04, proofread of the whole book
 |2022-02-19|dh|Add section on a <<sec-java,Java setting>> which may cause problems, some other minor changes
 |2021-05-19|dh|Add <<sec-dns64-acl,DNS64 access control>> description on the physical host, some minor changes
 |2021-03-21|dh|Add <<sec-firewall,firewall chapter>> with Shorewall and sshguard and cover <<sec-network-delay-systemd,systemd-networkd delay problem>> of virtual machines

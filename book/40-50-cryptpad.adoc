@@ -1,6 +1,6 @@
 == Cryptpad instance
 
-Cryptpad is a browser-based collaborative document management which stores all information on the server encrypted.
+Cryptpad is a browser-based collaborative document management which stores all information encrypted on the server.
 So, even administrators of the server system cannot read the information unless they have a key for access.
 
 We install a complete self-contained cryptpad server on a virtual machine.
@@ -37,7 +37,7 @@ You can get the list of installed application packages with `ufw app list`.
 Note that you do not need a local Postfix instance for cryptpad.
 
 ufw stores the actual firewall rules in files below `/etc/ufw`.
-The app rules applied above get stored in `/etc/ufw/user6.rules`.
+The app rules defined above get stored in `/etc/ufw/user6.rules`.
 You should not temper that file, stay with `ufw` commands for configuration.
 If everything is in place, change `/etc/ufw/ufw.conf` and set
 
@@ -50,7 +50,7 @@ To check that everything works as expected, perform `ip6tables -L` which should 
 Start ufw with `systemctl restart ufw` and run `ip6tables -L` again.
 Now you should see a rather lengthy list of rule chains and rules, among them the rules regarding port 3000 you gave above.
 
-Test that you can reach the Apache server on the system.
+Test that you can reach the Apache server on the virtual machine.
 
 You should now add the DNS name of your cryptpad instance.
 Remember what we said about system names and service names:
@@ -64,12 +64,14 @@ This said, add the appropriate entries to your DNS records. We will assume `cryp
 
 === Install cryptpad
 
+WARNING: The following configuration description may be outdated as it refers to Cryptpad of late 2018. Please refer to https://docs.cryptpad.org/en/admin_guide/installation.html[the official documentation] in case of any doubt.
+
 Cryptpad is open-source software.
 Their producers offer storage space on their own cryptpad servers as business model.
 Therefore, they are not overly eager to promote independent installations.
-Nevertheless, it is no problem to run and maintain a self-hosted installation of the software as long as you have some idea about what you are doing there.
+Nevertheless, it is no problem to run and maintain a self-hosted installation of the software as long as you have some idea about what you are doing.
 
-Start with creating a user "cryptpad" with `adduser --disabled-password cryptpad`.
+Start with creating a user "cryptpad" with `adduser --disabled-password --gecos "Cryptpad service" cryptpad`.
 Add your key in its `.ssh/authorized_keys` file so that you can log into the account.
 
 As user `cryptpad`, you install some software packages needed by Cryptpad:
@@ -79,7 +81,7 @@ As user `cryptpad`, you install some software packages needed by Cryptpad:
 * Log out and in again to have you user-local `nvm` accessible.
 
 * Now install Node.js.
-In late 2018, Cryptpad used version 6.6.0, so the command is
+In late 2018 footnote:[Yes, this needs to be updated…], Cryptpad used version 6.6.0, so the command is
 
 .Install Node.js 6.6.0
 ----
@@ -126,10 +128,10 @@ $ bower install
 ----
 
 These are also the routine steps after an update.
-Note that especially the `npm install` step seems to download "half of the internet".
+Note that especially the `npm install` step seems to download "half the internet".
 This is expected behaviour.
-Cryptpad comes from the Javascript/Node.js sphere and those folks love to use a plethora of library packages with themselves use another plethora of library packages.
-Fortunately, subsequent updates will only touch a subset of these libraries...
+Cryptpad comes from the Javascript/Node.js sphere and those folks love to use a plethora of library packages which themselves use another plethora of library packages.
+Fortunately, subsequent updates will only touch a subset of these libraries…
 
 After installation comes configuration:
 
@@ -155,7 +157,7 @@ We configure cryptpad itself in a way that it uses it's domain name in the `_dom
 To be sure that this happens on the correct interface, we use the actual IPv6 address here.
 
 After this step, Cryptpad is configured completely but not yet started.
-We come back to this a moment later.
+We come back to this in a moment.
 
 As a final step, you should remove the `$HOME/cryptpad/customize` subdirectory if you do not really need it.
 It will not be updated during updates and might carry outdated information after updates.
@@ -172,7 +174,8 @@ For `systemd`-controlled servers as any modern Debian or Ubuntu installation, ad
 Description=CryptPad service
 
 [Service]
-ExecStart=/home/cryptpad/.nvm/versions/node/v6.6.0/bin/node /home/cryptpad/cryptpad/server.js
+ExecStart=/home/cryptpad/.nvm/versions/node/v6.6.0/bin/node \
+  /home/cryptpad/cryptpad/server.js
 WorkingDirectory=/home/cryptpad/cryptpad
 Restart=always
 User=cryptpad
@@ -197,7 +200,7 @@ Now you can start the cryptpad service:
 The cryptpad server should now be reachable on the virtual machine _and_ on the physical host on its port 3000.
 Test it with `curl http://cryptpad.example.com:3000/` on both systems.
 From any other computer, the service _must not_ be reachable due to the firewall blocking the access.
-Do test this, also!
+Test this, too!
 
 
 === Apache on virtual machine
@@ -270,3 +273,5 @@ Now, cryptpad can also be reached from any IPv4-only hosts.
 Note that on the physical host, you forward to port 3000 on the virtual machine.
 This is the reason why the port must be reachable from the physical host.
 Port 3000 on the physical host is totally unaffected from all of this and in fact, you could just install another, independent service there without breaking your Cryptpad on the virtual machine.
+
+The main takeaway from this installation procedure is: If you have a service on a virtual machine for which you configure an Apache (or Nginx or any other HTTP server) as reverse proxy, chances are good that you get IPv4 connectivity by adding another reverse proxy to the physical host (or any other IPv4-connected machine) with _exactly the same reverse proxy configuration_. A future version of this guide should make this clearer.

@@ -2,10 +2,17 @@
 
 // NO_LIBRARY
 
+We have finally reached the end of this documentation.
+I have now described how I setup a physical host and KVM-based virtual machines which operate with IPv6 connectivity only.
+I have also described how to bridge this setup so that services are also accessible from the IPv4-based internet.
+I walked not only through the system configuration but also showed how to configure services in this environment.
+
+It's time for some final points.
+
 == Experiences and lessons learned
 
 I use the setup described here since October 2018 for my own internet server which serves multiple web sites, my complete private e-mail and a number of other services.
-The system works very reliably, I only had severe problems once when Ubuntu published a broken kernel which crashed the system constantly.
+The system works very reliably, I only https://blog.hillbrecht.de/2019/09/05/blogausfall-dank-kernel-panic-bei-ubuntu-18-04/[had severe problems once] when Ubuntu published a broken kernel which crashed the system constantly.
 Apart from that, routing, networking in general and the whole virtualisation do not make any problems.
 
 Very early in the process, I learned that even in 2018, you cannot survive in the internet without IPv4 connectivity.
@@ -15,23 +22,24 @@ I also had to relax my "No IPv4"-policy for the virtual machines.
 E.g. e-mail servers can simply not be made available without direct IPv4 connectivity - or no IPv4-only mail servers will deliver any e-mail to them.
 For all more sophisticated services like video conferencing servers this also holds true.
 Therefore, adding an IPv4 address to the virtual machines is far more often needed than I hoped.
-However, it is important that this is _always_ only an "on top" connectivity.
+However, it is important that this is _always_ only "on top".
 Everything continues to work if you remove the IPv4 infrastructure - it is only unreachable from the "IPv4 internet" then.
 Hopefully, in the not too distance future this becomes less and less of an issue so that a true IPv6-only setup can be used without any disadvantages.
 
 
 == Maturity of configurations
 
-This guide describes several configurations with different level of maturity. This is how the maturity is *as of May 2021*:
+This guide describes several configurations with different level of maturity. This is how the maturity is *as of December 2022*:
 
-* Physical host
-** Hetzner Online: Almost all systems configured this way are located at Hetzner's data center.
-Ubuntu 20.04:::: Guide has been in use for several installations and all seems to work fine. Usable for production systems as long as no router advertisements are used.
-Ubuntu 18.04:::: In usage for production systems since almost two years. Flawless. Use this for setups which "just have to run". Use this if in doubt what to use.
-Ubuntu 16.04:::: Still works but should not be used any more. Support has been dropped in Spring 2021.
-** Local network: I have also installed one system using this setup in a local network.
+* *Physical host*
+** *Hetzner Online*: Almost all systems configured this way are located at Hetzner's data center.
+Ubuntu 22.04:::: The latest and greatest. Not yet in production usage on my systems but soon will be. No problems occurred during the tests.
+Ubuntu 20.04:::: Guide has been in use for several high-volume installations and everything works fine. Keep the <<sec-static-routes,problem with the router advertisements for additional static routes>> in mind, however.
+Ubuntu 18.04:::: In usage for production systems since 2018. Flawless. However, you should not use this any more as support for this version will end in April 2023.
+** *Local network*: I have also installed one system using this setup in a local network.
 Ubuntu 18.04:::: Works. Also the only one I've tried.
-* Virtual machines
-Ubuntu 20.04::: Works out of the box. Especially, here are no problems with IPv6 router advertisements. Strange world...
+* *Virtual machines*
+Ubuntu 22.04::: Works out of the box.
+Ubuntu 20.04::: Works out of the box. Especially, here are no problems with IPv6 router advertisements. Strange world…
 Ubuntu 18.04::: Works out of the box.
 Windows 10::: Works out of the box.

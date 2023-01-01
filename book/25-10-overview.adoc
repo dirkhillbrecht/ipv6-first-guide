@@ -11,23 +11,32 @@ Installing a virtual machine might sound difficult to you if you have never done
 
 Furthermore, if you make a configuration mistake on the physical host, you might end with a broken machine. If this happens in a virtual machine, you have several ways to solve the problem: You can connect to the console and log in directly without network access. If the machine does not boot any more, you can even mount the virtual hard disk into the physical machine and try to fix. And if the machine is for any reason broken beyond repair, you can just throw it away and start over with a fresh installation.
 
-I suggest to start with a throw-away virtual machine. It will not contain any "real" services but only show any remaining problems in the setup. Further, it allows to test and learn the whole process of installing a virtual machine in the setup.
+I suggest to start with a throw-away virtual machine. It will not contain any "real" services but only show any remaining problems in the setup. Furthermore, it allows to test and learn the whole process of installing a virtual machine in the setup:
 
 * Copy the installation ISO image for the system to install onto the host.
 * Connect to the KVM system using `virt-manager`. Of course, you might also use another client, but I find this rather easy.
 * Use the ssh connection of the normal user created on the host.
 * Start the host creation.
 
-From hereon, things become rather standard. We're now in the process of installing a guest system in a KVM guest. My best practices are these:
+From hereon, things become rather standard. We're now in the process of installing a guest system on a KVM host. My best practices are these:
 
 * Assign as many CPUs to the virtual machine as the hardware has. Only if you suspect the virtual machine to grab too much resources, reduce the CPU number.
 * Use cow2 image file for the virtual harddisk. It is the most flexible way once it comes to migrating the virtual machine and today's file systems can cope with the double indirection quite well.
 * Give the virtual machine definition the same name the system will later have.
 
-The one interesting point is the network configuration at the very end of the definition process. Here, enter the "Network selection" before creating the machine. Select "Name of common device" and give the name of bridge explicitly. Here it is `br0`.
+The one interesting point is the network configuration at the very end of the definition process. Here, enter the "Network selection" before creating the machine. Select "Bridge device" as network type and give the name of bridge which is `br0` in our setup:
 
-.Select the correct network device
-image::pics/virt-mana-network.png[]
+.Select the correct network device in virt-manager
+image::pics/virt-mana-network-2.png[align="center",width="50%"]
+
+[NOTE]
+.Network dialog in older versions of virt-manager
+====
+virt-manager versions included in Ubuntu before 22.04 organized the network selection dialog slightly different. You just select "Name of common device" and give the bridge's name there.
+
+.Select the network device in older virt-manager
+image::pics/virt-mana-network.png[align="center",width="40%"]
+====
 
 If you are ready, press "Create" and summon your first virtual system.
 
@@ -36,7 +45,7 @@ If you are ready, press "Create" and summon your first virtual system.
 To work with the long IPv6 addresses conveniently, DNS is almost mandatory. You should enter the virtual machine now into the domain.
 
 * Find the virtual machine's IP address. On Linux systems, `ip a` does the job. You may also derive it manually from the virtual machine's MAC address (as SLAAC uses it, too).
-* Create an entry in the DNS zone of the system. Note that you only enter a `AAAA` record, _not_ an old-fashioned `A` record for an IPv4 address. The system just has no IPv4 address...
+* Create an entry in the DNS zone of the system. Note that you only enter a `AAAA` record, _not_ an `A` record for an IPv4 address. The system just has no IPv4 address...
 * In my opinion, it makes also sense to _always_ create a reverse IP entry for IPv6 hosts. If for any reason your DNS AAAA entry vanishes, you still have the reverse IP entry which assigns name and IP address. Reverse IP entries are always managed in the DNS realm of the IP network owner. In my case, they are edited in Hetzner's robot interface.
 
 The SLAAC mechanism derives the IP address from the MAC address of the virtual machine. So, it will be static even though it has nowhere been configured explicitly.
@@ -46,14 +55,14 @@ If you want your virtual machine to be started automatically if the physical hos
 [[sec-add-ipv4]]
 === Adding an IPv4 address to the virtual machine
 
-The first and foremost advice for this topic: *Don't do it!*
+The first advice for this topic: *Don't do it!*
 
 Your virtual machine is fully connected to the internet any can be reached from anywhere and for any service.
 The only restriction is that a connecting party must use IPv6.
 Most systems, however, are connected by IPv6 these days.
 
 Even if the virtual machine hosts a service which must also be accessible by IPv4-only clients, a direct IPv4 connection for the virtual machine is not mandatory.
-Especially for HTTP-based services, we will configure a reverse proxying scheme on the physical host which allows transparent connections to IPv6-only web servers on the virtual machines for IPv4-only clients.
+Especially for HTTP-based services, we will <<service-webserver,configure a reverse proxying scheme>> on the physical host which allows transparent connections to IPv6-only web servers on the virtual machines for IPv4-only clients.
 So, only configure a direct IPv4 connection into a virtual machine if it runs a service which _requires_ it.
 
 In the provider-based scenarios, the provider has to assign an additional IPv4 address to the physical host. Then, the physical host must be configured in a way that it passes the IPv4 address to the virtual machine. Finally, the operating system on the virtual machine must handle these connections. Do like this:
@@ -62,7 +71,7 @@ Obtain an additional IPv4 address for your server from your hoster.
 If you already have a network of them assigned to your server, you can use one of those, of course.
 
 .Provider-dependent setup
-IMPORTANT: The actual setup depends on the network scheme of your provider. Hetzner implements a direct peer-to-peer routing of IPv4 addresses. We continue based on this setup.
+IMPORTANT: The actual setup depends on the network scheme of your provider. Hetzner Online implements a direct peer-to-peer routing of IPv4 addresses. We continue based on this setup.
 
 ==== The physical host
 
@@ -102,6 +111,8 @@ Peer=<IPv4 address for the virtual machine>
 
 There are two `[Address]` entries now in this file which both have the same `Address` but different `Peer` entries. That's intentional.
 
+After having changed the configuration, reload the service via `systemctl restart systemd-networkd`.
+
 ==== The virtual machine
 
 On the virtual machine, add the IPv4 address to the Netplan configuration, usually in `/etc/netplan/01-netcfg.yaml`. It reads completely like this:
@@ -122,7 +133,7 @@ network:
 ----
 
 .The physical host is the IPv4 default route!
-CAUTION: Note that - at least in the Hetzner network - it is crucial that you declare _the physical host_ as the default route for IPv4 traffic from the virtual machines! If you set the gateway given by Hetzner, traffic is not routed. In this case, you can reach the guest from the host but from nowhere else via IPv4.
+CAUTION: Note that - at least in the Hetzner Online network - it is crucial that you declare _the physical host_ as the default route for IPv4 traffic from the virtual machines! If you set the gateway given by Hetzner, traffic is not routed. In this case, you can reach the guest from the host but not from anywhere else via IPv4.
 
 On the virtual machine, you can apply your changes with `netplan try` and pressing Enter, too. You can check the IPv4 routes after that which should only show one entry:
 
@@ -165,7 +176,7 @@ If you have not defined <<sec-dns64-acl,DNS64 access control lists>> in the bind
 
 Normally, this has no drawbacks. We install the IPv4 connectivity only for _clients_ which need to connect to a service on the virtual machine via IPv4 - and this is the case with the configuration described above. Remember that the whole NAT64/DNS64 magic happens at the DNS layer. My advice is to generally _keep_ it this way and let the virtual machines use the address translation scheme for IPv4 connections anyway.
 
-There are exceptions to this rule, however. The most remarkable one is if the virtual machine becomes an e-mail server. In this case, it _must_ establish outgoing connections to IPv4 servers via IPv4 or otherwise its connections are blocked. In such a case, exclude the server in the physical host's DNS configuration:
+There are exceptions to this rule, however. The most remarkable one is if the virtual machine becomes an e-mail server. In this case, it _must_ establish outgoing connections to IPv4 servers via IPv4 or otherwise its connections are blocked. In such a case, exclude the virtual machine in the physical host's DNS configuration:
 
 .Exclude a virtual machine from DNS64 in /etc/bind/named.conf.options on the physical host
 ----
@@ -191,9 +202,9 @@ If IPv4 enhancement and direct IPv4 access is the norm for your virtual machines
 
 This setup assigns IPv4 addresses statically. One could argue that the usual auto configuration setups like DHCP and MAC-address-based IP address assignment should be used. This would, of course, be possible.
 
-I opted against such setups as I don't think, they are necessary. The setup described here is based on IPv6 and it can be run as IPv6-only setup. For IPv6, we have complete connectivity and auto-configuration - which is even completely static so no configuration entries are needed for individual machines.
+I opted against such setups as I don't think that they are necessary. The setup described here is based on IPv6 and it can be run as IPv6-only setup. For IPv6, we have complete connectivity and auto-configuration - which is even completely static so no configuration entries are needed for individual machines.
 
-The complexity of IPv4 setups comes from the workarounds established against its limitations, most notably to notorious NAT setups and addresses from some local address ranges.
+The complexity of IPv4 setups comes from the workarounds established against its limitations, most notably NAT setups and addresses from some local address ranges.
 
 _All this is not needed any more with IPv6!_
 
@@ -207,11 +218,11 @@ It's much simpler and less error-prone than administrating additional DHCP serve
 [[sec-network-delay-systemd]]
 === Network detection delays with systemd-networkd
 
-On some systems, namely Ubuntu 20.04, `systemd-networkd` has a problem detecting that all networks came up on boot.
+On some systems, namely Ubuntu 20.04, `systemd-networkd` has a problem detecting that all networks came up on boot of the virtual machine.
 Typical symptoms are
 
 * More than two minutes boot time even though the virtual machine becomes ready some seconds after a reboot command.
-* `/etc/rc.local` is only executed after some spare time.
+* `/etc/rc.local` is executed with a mentionable delay.
 * Services like the firewall are only activated minutes after the reboot.
 * `systemd-networkd` writes something like
 +

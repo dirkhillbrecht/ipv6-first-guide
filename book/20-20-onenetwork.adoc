@@ -18,6 +18,7 @@ They are located at the German hoster Hetzner Online, so my knowledge and experi
 Hopefully, in the future other environments are added to this guide to make it less centric about one special provider.
 ====
 
+[[sec-initial-hetzner-setup]]
 === Initial setup of the host system at Hetzner's
 
 If you rent the Hetzner server, order it with the "rescue system" booted.
@@ -26,8 +27,8 @@ I suggest that you access the server in this early stage by its IP address only.
 We'll change the IPv6 address of the system later in the install process.
 If you want to have a DNS entry, use something interim to throw away later, e.g. `<plannedname>-install.example.org`.
 
-I obtained my server in Hetzner's "rescue system" which allows the OS installation through the `installimage` script.
-I wanted to work with as much default components and configurations as possible, so I decided for the Ubuntu 20.04 footnote:[This guide often refers to Ubuntu 18.04. I fact, installation works the same on both if not stated otherwise explicitly.] install image offered by Hetzner.
+As suggested above, I obtained my server in Hetzner's "rescue system" which allows the OS installation through the `installimage` script.
+I wanted to work as much as possible with default components and configurations, so I decided for the Ubuntu 22.04 footnote:[This guide sometimes refers to earlier Ubuntu versions. In fact, installation works quite the same on all of them if not explicitly stated otherwise.] install image offered by Hetzner.
 
 .Stay with default setups as much as possible
 IMPORTANT: I strongly advise you to always stick with the offered setups from your hosting provider as much as possible.
@@ -76,7 +77,7 @@ root@rescue ~ #
 ----
 
 You might want to write down MAC address and IP addresses of the system.
-Note, however, that they are also included in the delivery e-mail sent by Hetzner when the server is ready.
+Note, however, that they are also included in the delivery e-mail sent by Hetzner Online when the server is ready. You also see the addresses in the Hetzner Online server configuration interface or can request them with the `ip -a` command in the rescue system.
 
 .SSH keys for Hetzner rescue images
 TIP: If you put your ssh public key into your Hetzner account and select it in the order process for the machine, it will not only be put into the rescue system but also into the root account of the freshly installed machine.
@@ -88,7 +89,9 @@ And for systems like this, I do not install any partitions at all (apart from th
 The KVM disks will go to qcow2 files which are just put into the host's file system.
 Modern file systems fortunately do not have any problems with 200+ GB files and this way, all the virtual guest harddisks are also covered by RAID.
 
-Hetzner's `installimage` process is controlled by a configuration file. Its (striped-down) version for the system I work on reads like this:
+Hetzner\'s `installimage` asks in a dialog for the image to use. This guide is applicable for the Ubuntu images, preferrably the 22.04 version, but 20.04 works also. 18.04 would be ok, too, but this version will be outdated in April 2023 footnote:[...or is outdated since April 2023, depending on when you read this.] - don\'t use it for new installations any more.
+
+The image installation process is controlled by a configuration file. Its (striped-down) version for the system I work on reads like this:
 
 .installimage control file for the physical host
 ----
@@ -232,7 +235,7 @@ This is a good moment to test whether Hetzner's rescue mechanism works.
 Sometimes, the servers are not correctly configured in the BIOS and do not load the rescue system even if this is requested in the interface:
 
 * Activate the "rescue system boot" in the Robot interface.
-Select your ssh key so that you do not have to enter a password
+Select your ssh key so that you do not have to enter a password.
 * Reboot the machine.
 * Logging in via ssh after 1 to 2 minutes should being up the rescue system.
 Just reboot the machine from the command line - there is no need to rescue now.
@@ -298,14 +301,25 @@ The `mkdir` creates `/tmp` without any special access rights.
 Fortunately, declaring the file system to be `tmpfs` in `/etc/fstab` above makes the access rights `1777` (or `rwxrwxrwt`) - which is exactly what we need for `/tmp`.
 
 You should reboot the system after this change.
-There are changes that wiping `/tmp` this way confuses processes.
+Chances are that wiping `/tmp` this way confuses processes.
 
 .On the reboots
 WARNING: You will read "reboot the system" often during this guide.
 _This is not a joke!_
 We configure very basic system and network settings here and it is crucial that these settings are correct if the system starts up!
 Check this step by step by rebooting and fix any problems before continuing.
-Otherwise, your server will be unreliable - and that's a bad thing!
+Otherwise, your server will be unreliable - and that\'s a bad thing!
+
+=== Adjust the time zone
+
+One tiny piece in the puzzle is the timezone of the just-installed machine. At least the Hetzner Online installation scheme leaves the server with UTC as timezone. If you want to have it in the local timezone, change it via
+
+----
+timedatectl set-timezone <timezonename>
+----
+
+You get the available timezones with `timedatectl list-timezone`. For Germany, the command is `timedatectl set-timezone "Europe/Berlin"`.
+
 
 === Preparing the network settings of the host
 
@@ -315,14 +329,14 @@ For this, we first have to configure a network bridge on the system.
 
 I must say that I felt rather uncomfortable with Hetzner's IPv6 approach in the beginning.
 Having only one /64 IPv6 network disallows a routed setup.
-Due to the way how IPv6 works, you _cannot split this network sensibly into smaller ones_.
-I really suggest reading https://etherealmind.com/allocating-64-wasteful-ipv6-not/[Why Allocating a /64 is Not Wasteful and Necessary] and especially https://www.networkworld.com/article/2223248/cisco-subnet/the-logic-of-bad-ipv6-address-management.html[The Logic of Bad IPv6 Address Management] to find out how the semantics of the IPv6 address space differ from the IPv4 one.
+Due to the way how IPv6 SLAAC address recovery works, you _cannot split this network sensibly into smaller ones_.
+I really suggest reading https://etherealmind.com/allocating-64-wasteful-ipv6-not/[Why Allocating a /64 is Not Wasteful and Necessary] and especially https://www.networkworld.com/article/2223248/cisco-subnet/the-logic-of-bad-ipv6-address-management.html[The Logic of Bad IPv6 Address Management] to find out how the semantic of the IPv6 address space differs from IPv4.
 If you have a hoster who gives you a ::/56 or even ::/48 network, you can surely manage your addresses differently. Most probably, you will go with a routed setup.
 
-Since my start on the IPv6 road, I learned however that Hetzner's approach is not _that_ wrong.
+However, since my start on the IPv6 road, I learned that Hetzner's approach is not _that_ wrong.
 They use the link local `fe80::` address range for gateway definitions https://blogs.infoblox.com/ipv6-coe/fe80-1-is-a-perfectly-valid-ipv6-default-gateway-address/[and this a totally valid approach].
 
-Anyway, we have to use what we get.
+We have to use what we get.
 First, enable IPv6 forwarding globally by issuing
 
 ----
@@ -374,17 +388,17 @@ I describe the needed changes in the following section.
 
 ==== Ubuntu 18.04 and later with Netplan
 
-Ubuntu 18.04 comes with a relatively new tool named https://netplan.io[Netplan] to configure the network.
+Ubuntu 18.04 and the later versions comes with https://netplan.io[Netplan] to configure the network.
 Since about November 2018, Hetzner uses this setup in their install process.
-Note that earlier Ubuntu installations are provided with systemd-networkd-based setup described below.
+Note that earlier Ubuntu installations are provided with systemd-networkd-based setup described <<sec-systemd-networkd,below>>.
 
 Netplan uses configuration files with YAML syntax.
 In most cases, there is only one file: `/etc/netplan/01-netcfg.yaml`.
-For freshly installed Hetzner servers, it looks somehow like this:
+For freshly installed Hetzner servers with Ubuntu 22.04, it looks somehow like this:
 
-.Netplan network configuration on a Hetzner server
+.Netplan network configuration on a Hetzner server (Ubuntu 22.04)
 ----
-root@merlin /etc/netplan # cat 01-netcfg.yaml 
+root@merlin /etc/netplan # cat 01-netcfg.yaml
 ### Hetzner Online GmbH installimage
 network:
   version: 2
@@ -398,14 +412,29 @@ network:
         - on-link: true
           to: 0.0.0.0/0
           via: 241.61.86.225
-      gateway6: fe80::1
+        - to: default
+          via: fe80::1
+      nameservers:
+        addresses:
+          - 185.12.64.2
+          - 2a01:4ff:ff00::add:1
+          - 185.12.64.1
+          - 2a01:4ff:ff00::add:2
 ----
-      
-Change it like this:
 
-.Netplan configuration as needed for the physical host
+What you do now is:
+
+* Define a bridge device `br0`;
+* Assign all settings of the physical ethernet device to that bridge;
+* Bind the bridge to that device;
+* Pinpoint its MAC address to the one of the physical device, otherwise traffic will not be routed;
+* Disable all network configuration on the physical device.
+
+After these changes, the Netplan configuration from above looks like this:
+
+.Netplan configuration as needed for the physical host (Ubuntu 22.04)
 ----
-root@merlin ~ # cat /etc/netplan/01-netcfg.yaml 
+root@merlin ~ # cat /etc/netplan/01-netcfg.yaml
 ### Hetzner Online GmbH installimage
 network:
   version: 2
@@ -427,15 +456,18 @@ network:
         - on-link: true
           to: 0.0.0.0/0
           via: 241.61.86.225
-      gateway6: fe80::1
+        - to: default
+          via: fe80::1
+      nameservers:
+        addresses:
+          - 185.12.64.2
+          - 2a01:4ff:ff00::add:1
+          - 185.12.64.1
+          - 2a01:4ff:ff00::add:2
 ----
-      
-You disable both DHCP protocols on the physical device and attach it to the newly defined bridge device `br0`.
-That bridge gets all definitions from the physical device.
-*It also gets the MAC address of the physical device*, otherwise Hetzner's network will not route any packets to it.
 
 Note that you also disable any IPv6 auto-configuration on the `br0` device by adding `accept-ra: false` into its configuration.
-We'll setup the routing advertisement daemon lateron for the virtual machines, but it should not interact with the physical host.
+We\'ll setup the routing advertisement daemon lateron for the virtual machines, but it should not interact with the physical host.
 
 Netplan has the very nice capability to apply a new configuration to a running system and roll it back if something goes wrong.
 Just type `netplan try`.
@@ -471,7 +503,40 @@ _This is intentional!_
 
 You should test now that you can login to the system through both IPv6 and IPv4 protocol, use `ssh -6 <hostname>` and `ssh -4 <hostname>` to enforce the IP protocol version.
 
+==== Ubuntu 20.04 with `gateway6` directive
 
+Note that Ubuntu 20.04 (and earlier) did not define the IPv6 default route with a standard `routes` definition, but used a specific `gateway6` key:
+
+.IPv6 gateway in Netplan on Ubuntu 20.04 and earlier
+----
+network:
+[...]
+  ethernets:
+  [...]
+      routes:
+        - on-link: true
+          to: 0.0.0.0/0
+          via: 241.61.86.225
+      gateway6: fe80::1
+----
+
+Move this definition as it is into the `br0` section:
+
+.IPv6 gateway for the physical host on Ubuntu 20.04 and earlier
+----
+network:
+[...]
+  bridges:
+    br0:
+    [...]
+      routes:
+        - on-link: true
+          to: 0.0.0.0/0
+          via: 241.61.86.225
+      gateway6: fe80::1
+----
+
+[[sec-systemd-networkd]]
 ==== Ubuntu 18.04 and other systems with systemd-networkd
 
 .This section is not updated any more
@@ -497,7 +562,7 @@ STP=true
 It is extremly important to define the MAC address, or Hetzner will not route traffic to the system.
 STP seems not mandatory, does not hurt either. I kept it in.
 
-Then, assign bridge to physical device in `20-br0-bind.network`:
+Then, assign the bridge to the physical device in `20-br0-bind.network`:
 
 .Bridge assignment in 20-br0-bind.network
 ----
@@ -540,89 +605,11 @@ Reboot again.
 Investigate. Repeat until it works...
 
 
-=== Change IPv6 address
-
-NOTE: This step is _not_ performed by `install-kvm-host.sh`.
-
-You might think about changing the IPv6 address of the physical host.
-The Hetzner provider configures them always having `0:0:0:2` as address.
-While there is nothing wrong with that, giving the host a random address makes the whole installation a bit less vulnerable to brute-force attacks.
-
-Fortunately, changing the address is really simple.
-In the *Netplan-based setup*, it is in `/etc/netplan/01-netcfg.yaml`. Look for the `addresses` of the `br0` device:
-
-----
-network:
-[...]
-  bridges:
-    br0:
-[...]
-      addresses:
-        - 2a01:4f8:1:3::2/64
-----
-    
-Change it's host part (the lower 64 bits) to more or less whatever you like
-
-----
-        - 2a01:4f8:1:3:6745:a24b:cc39:9d1/64
-----
-
-If you work *with systemd-networkd*, the network configuration is in `/etc/systemd/network/21-br0-conf.network` if you followed this guide:
-
-----
-[Network]
-Address=2a01:4f8:1:3::2/64
-----
-
-Change it to
-
-----
-[Network]
-Address=2a01:4f8:1:3:6745:a24b:cc39:9d1/64
-----
-
-You can also _add_ and not replace the additional address.
-Then, your server can be accessed through _both_ addresses.
-While it is absolutely no problem to have multiple IPv6 addresses on the same device, it can make configuration of services more difficult as the correct address for outgoing messages has to be selected correctly.
-I would suggest _not_ to do this.
-Stay with one address.
-
-Use `netplan try` or `systemctl restart systemd-networkd` to apply the new settings.
-Note that if you are connected via IPv6, your connection will be interrupted and you have to reconnect.
-If you are connected via IPv4 (e.g. by `ssh <IPv4-address>` or `ssh -4 <hostname>`), your connection should survive.
-systemd-networkd, however, might need several seconds to sort everything out.
-
-If everything works, add a reboot.
-In theory, restarting the network configuration should be sufficient, but my system sometimes behaved strangely after that.
-
-ssh to the _new_ address should now work.
-If it doesn't and your are locked out, again use the rescue system to sort it out.
-
-Now is the time to add the physical host to the DNS:
-
-* Add an `AAAA` record in the domain the system should be reachable in.
-
-* Add a `PTR` record in the hoster's reversal IP entries.
-If there is already an entry for the former address, you can remove it by simply wiping out the server name and pressing "Enter".
-
-* While you're at it, also add the `A` record and the `PTR` record for the IPv4 address of the Host.
-
-.Keep DNS time-to-live short!
-TIP: I strongly suggest that you set the TTL for all DNS entries as short as possible during the setup, something between 2 and 5 minutes.
-If you make a mistake and you have a TTL of multiple hours or even a day, you may have serious issues with the name service as long as the TTL of the wrong entries is not invalid everywhere.
-
-.The rescue system IP address
-IMPORTANT: If you ever have to reboot your server into Hetzner's rescue system, keep in mind that it will get its _original_ IPv6 address ending in `::2`.
-You will not be able to access it through its DNS name.
-You might want to add a DNS entry for `<servername>-rescue.example.org` for such cases.
-Of course, you have to remember that, too...
-
-
 === Ensure correct source MAC address
 
 Our virtual machines will have their own MAC addresses.
 Otherwise, the IPv6 auto configuration would not work.
-Unfortunately, these MAC addresses will also leak through the bridge into Hetzner's network and that might lead to trouble as the provider does only accept the actual assigned MAC address of the main server as valid.
+Unfortunately, these MAC addresses will also leak through the bridge into Hetzner\'s network and that might lead to trouble as the provider does only accept the actual assigned MAC address of the main server as valid.
 
 To prevent such problems perform MAC address rewriting using the `ebtables` command.
 You might need to install it using `apt install ebtables` first.
@@ -633,8 +620,8 @@ Then use:
 ebtables -t nat -A POSTROUTING -j snat --to-src <MAC address of the physical network card of the host>
 ----
 
-I've added this to `/etc/rc.local`.
-On a default installation of Ubuntu 20.04 (or 18.04), this file does not exist.
+I\'ve added this to `/etc/rc.local`.
+On a default installation of Ubuntu 22.04 (or 20.04 - or 18.04), this file does not exist.
 If you create it, make it look like this:
 
 .Example /etc/rc.local
@@ -670,9 +657,92 @@ root@merlin ~ #
 
 Reboot the systems once more to check if the rule survives a reboot.
 
+
+=== Change IPv6 address
+
+NOTE: This step is _not_ performed by `install-kvm-host.sh`.
+
+You might think about changing the IPv6 address of the physical host.
+Hetzner Online configures them always having `0:0:0:2` as IPv6 address host part.
+While there is nothing wrong with that, giving the host a random address makes the whole installation a bit less vulnerable to brute-force attacks.
+
+Fortunately, changing the address is really simple.
+In the *Netplan-based setup*, it is in `/etc/netplan/01-netcfg.yaml`. Look for the `addresses` of the `br0` device:
+
+----
+network:
+[...]
+  bridges:
+    br0:
+[...]
+      addresses:
+        - 2a01:4f8:1:3::2/64
+----
+
+Change it's host part (the lower 64 bits) to more or less whatever you like
+
+----
+        - 2a01:4f8:1:3:6745:a24b:cc39:9d1/64
+----
+
+If you work *with systemd-networkd*, the network configuration is in `/etc/systemd/network/21-br0-conf.network` if you followed this guide:
+
+----
+[Network]
+Address=2a01:4f8:1:3::2/64
+----
+
+Change it to
+
+----
+[Network]
+Address=2a01:4f8:1:3:6745:a24b:cc39:9d1/64
+----
+
+You can also _add_ and not replace the additional address.
+Then, your server can be accessed through _both_ addresses.
+While it is absolutely no problem to have multiple IPv6 addresses on the same device, it can make configuration of services more difficult as the correct address for outgoing messages has to be selected correctly.
+I would suggest _not_ to do this.
+Stay with one IPv6 address.
+
+Use `netplan try` or `systemctl restart systemd-networkd` to apply the new settings.
+Note that if you are connected via IPv6, your connection will be interrupted and you have to reconnect.
+If you are connected via IPv4 (e.g. by `ssh <IPv4-address>` or `ssh -4 <hostname>`), your connection should survive.
+systemd-networkd, however, might need several seconds to sort everything out.
+
+If everything works, add a reboot.
+In theory, restarting the network configuration should be sufficient, but at least back in the days of Ubuntu 18.04 and earlier my system sometimes behaved strangely after this change.
+
+ssh to the _new_ address should now work.
+If it doesn't and your are locked out, again use the rescue system to sort it out.
+
+[[sec-physical-dns]]
+=== Add DNS entries
+
+Now is the time to add the physical host to the DNS:
+
+* Add an `AAAA` record in the domain the system should be reachable in.
+
+* Add a `PTR` record in the hoster's reversal IP entries.
+If there is already an entry for the former address, you can remove it by simply wiping out the server name and pressing "Enter".
+
+* While you're at it, also add the `A` record and the `PTR` record for the IPv4 address of the Host.
+
+.Keep DNS time-to-live short!
+TIP: I strongly suggest that you set the TTL for all DNS entries as short as possible during the setup, something between 2 and 5 minutes.
+If you make a mistake and you have a TTL of multiple hours or even a day, you may have serious issues with the name service as long as the TTL of the wrong entries is not invalid everywhere.
+
+.The rescue system IP address
+IMPORTANT: If you ever have to reboot your server into Hetzner's rescue system, keep in mind that it will get its _original_ IPv6 address ending in `::2`.
+You will not be able to access it through its DNS name.
+You might want to add a DNS entry for `<servername>-rescue.example.org` for such cases.
+Of course, you have to remember that, too...
+
+'''
+
 At this stage, lean back for a moment!
 The difficult part is done.
 You have the network setup of your KVM host up and running.
 The rest is much easier and will not potentially kill network access to system.
 Also, the stuff coming now is much less provider-specific.
-While the initial network setup might work considerably different with another hosting provider, chances are good that the following steps are the same regardsless of where you have placed your host.
+While the initial network setup might work considerably different with another hosting provider, chances are good that the following steps are the same regardless of where you have placed your host.

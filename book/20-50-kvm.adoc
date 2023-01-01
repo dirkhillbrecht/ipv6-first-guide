@@ -2,20 +2,10 @@
 
 The physical host is now up and running. To actually host virtual machines with IPv6-first connectivity, some more services need to be installed.
 
-=== Create a non-root user on the system.
-
-Installation processes like Hetzner's often generate a system with only the root user. To make it more compliant with usual Ubuntu behaviour, add a non-root user:
-
-* Create user with `adduser`.
-
-* Put your ssh public key into `.ssh/authorized_keys` of that user.
-
-You can now either perform the following steps as that user with `sudo -s` or continue as directly logged in root via ssh.
-
 
 === NAT64 with Tayga
 
-As I wrote, our virtual machines shall have IPv6-only internet. That implies that they _cannot_ access systems which are IPv4-only. Unfortunately, even in 2020 there are quite popular sites like `github.com` which do not have any IPv6 connectivity at all. To make such systems accessible from the guest systems, we setup a NAT64 service which performs a network address translation for exactly this case.
+As I wrote, our virtual machines shall have IPv6-only internet access. That implies that they _cannot_ access systems which are IPv4-only. Unfortunately, even in 2022 there are quite popular sites like `github.com` which do not have any IPv6 connectivity at all. To make such systems accessible from the guest systems, we setup a NAT64 service which performs a network address translation for exactly this case.
 
 I decided to go with the "Tayga" server. It's scope is limited to exactly perform NAT64. This makes it necessary to add further services to make all this really useable but it also minimizes configuration complexity.
 
@@ -153,7 +143,7 @@ Stop the manually started instance with `Ctrl-C`.
 .Enable the service explicitly on Ubuntu 18.04 and earlier
 [CAUTION]
 ====
-On Ubuntu 18.04 and Ubuntu 16.04, you have to explicitly enable the service. Edit `/etc/default/tayga`. Set `RUN` to `yes`:
+On Ubuntu 18.04 (and earlier), you have to explicitly enable the service. Edit `/etc/default/tayga`. Set `RUN` to `yes`:
 
 .Change in /etc/default/tayga
 ----
@@ -162,7 +152,7 @@ RUN="yes"
 ----
 ====
 
-Launch the service with `systemctl start tayga`. After that, `systemctl status tayga` should say the Active state is `active (running)`, the log lines in the status output should end with
+Launch the service with `systemctl start tayga`. After that, `systemctl status tayga` should report the Active state `active (running)`; the log lines in the status output should end with
 
 ----
 ... systemd[1]: Started LSB: userspace NAT64.
@@ -190,17 +180,17 @@ MASQUERADE  all  --  192.168.255.0/24     anywhere
 It is important that this rule exists, otherwise NAT64 will not work!
 Keep this in mind especially if you install a firewall on the physical host.
 If that firewall overwrites the complete routing rules set, it will also drop this rule and render Tayga unfunctional.
-We cover <<sec-firewall,below>> how to integrate Tayga and the Shorewall firewall.
+We cover below how to integrate Tayga <<sec-firewall,with the Shorewall firewall>>.
 
 === DNS64 with bind
 
-In the last chapter, we have assumed that the IPv6 client addresses in IPv4 host with a special IPv6 address.
-The question remains how a process is tricked into doing this.
+In the last chapter, we have assumed that the IPv6-only system maps IPv4-only targets on a makeshift IPv6 address.
+The question remains how it is tricked into doing this.
 We solve this problem now.
 
 ==== The concept of DNS64
 
-NAT64 is usually used together with a so-called "DNS64" name server. This is a specially configured name server. If a client asks it for an IPv6 name resolution, i.e. an `AAAA` name service record, and there is only an IPv4 `A` record for the requested name, the DNS64 name server "mocks up" an `AAAA` record munging the IPv4 address and a "well-known prefix" to a synthetical IPv6 address. This address - surprise, surprise - points directly to a nicely prepared NAT64 server so that the IPv6 system talks to an IPv4 system transparently hidden behind the NAT64 proxy.
+NAT64 is usually used together with a "DNS64" name server. This is a specially configured name server. If a client asks it for an IPv6 name resolution, i.e. an `AAAA` name service record, and there is only an IPv4 `A` record for the requested name, the DNS64 name server "mocks up" an `AAAA` record munging the IPv4 address and a "well-known prefix" to a synthetical IPv6 address. This address - surprise, surprise - points directly to a nicely prepared NAT64 server so that the IPv6 system talks to an IPv4 system transparently hidden behind the NAT64 proxy.
 
 .How DNS64 and NAT64 play together
 [plantuml,format="svg",align="center"]
@@ -242,7 +232,7 @@ n -> v : Return data
 
 We setup the DNS64 server using a classic bind DNS server. Modern versions include DNS64, it only has to be activated. Start the install with the usual `apt install bind9`.
 
-Our bind is a forwarding only-server only for our own virtual machines. On Debian-derived systems, the bind options needed for this setup are located in `/etc/bind/named.conf.options`. Edit that file and enter the following entries:
+Our bind is a forwarding-only server only for our own virtual machines. On Debian-derived systems, the bind options needed for this setup are located in `/etc/bind/named.conf.options`. Edit that file and enter the following entries:
 
 .Options for bind in /etc/bind/named.conf.options
 ----
@@ -393,26 +383,8 @@ interface br0 {
                 AdvOnLink on;
                 AdvAutonomous on;
                 AdvRouterAddr on;
-        };
-        RDNSS <IPv6 address of the physical host> {};
-        route 64:ff9b::/96 {};
-};
-----
-
-.Advertise infinite lifetime
-[NOTE]
-====
-IPv6 route advertisement is prepared for dynamically changing routes.
-In our setup, however, all routes are static.
-It might be sensible to add this information to the configuration:
-
-----
-interface br0 { [...]
-        prefix <IPv6 network assigned by provider>::/64 {
-                [...]
                 AdvValidLifetime infinity;
         };
-
         RDNSS <IPv6 address of the physical host> {};
         route 64:ff9b::/96 {
                 AdvRouteLifetime infinity;
@@ -420,8 +392,11 @@ interface br0 { [...]
 };
 ----
 
-More research is needed on whether this is really needed.
-====
+The `route` section advertises that _this_ system routes the `64:ff9b::` network. Only with this definition the virtual servers know where to send the packets for the emulated IPv6 addresses for the IPv4-only servers to.
+
+IPv6 route advertisement is prepared for dynamically changing routes.
+In our setup, however, all routes are static.
+Therefore, prefix and route advertisements are announced with "infinite" lifetime.
 
 .Use Googles DNS64 servers
 [TIP]
@@ -429,8 +404,12 @@ More research is needed on whether this is really needed.
 If you opted for the Google DNS64 servers to do the job, write instead
 
 ----
-        RDNSS 2001:4860:4860::6464 2001:4860:4860::64 {};
+        RDNSS 2001:4860:4860::6464 2001:4860:4860::64 {
+                AdvRouteLifetime infinity;
+        };
 ----
+
+This announcement can also have inifinite lifetime. Even if Google changed their server addresses, the definition here stays static.
 ====
 
 A `radvd` configuration must always be read as advertisement of the machine serving it.
@@ -440,7 +419,7 @@ Having this in mind, the configuration advertises all three network settings nee
 
 . The `prefix` section defines that _this_ host announces itself as router (`AdvRouterAddr`) to the given network and allows the machines to use SLAAC for generating their own IPv6 address (`AdvAutonomous`).
 . The RDNSS section declares _this_ machine to be the DNS resolver for the virtual machines.
-. The `route` section adds the static route for NAT64 ip addresses to _this_ machine.
+. The `route` section adds the static route for NAT64 IP addresses to _this_ machine.
 
 Start `radvd` and make it a permanent service (coming up automatically after reboot) using
 
@@ -450,11 +429,13 @@ systemctl start radvd
 systemctl enable radvd
 ----
 
-If you start `radvdump` soon after starting radvd, you will see the announcements sent by `radvd` in irregular intervals. It should contain the network router, the DNS server and the NAT64 route. For some reason, radvd seems to stop sending unsolicitated advertisements after some time if noone is listening.
-
-After `radvd` is up and running, check the physical host's bridge interface with `ip a show dev br0`. If you find something like
+If you start `radvdump` soon after starting radvd, you will see the announcements sent by `radvd` in irregular intervals. It should contain the network router, the DNS server and the NAT64 route. Note that radvd turns to rather long intervals between the advertisements after some time if noone is listening.
 
 .Spurious auto-configured routes on br0
+[NOTE]
+====
+After `radvd` is up and running, check the physical host's bridge interface with `ip a show dev br0`. If you find something like
+
 ----
     inet6 2a01:4f8:1:2345:abc:4680:1:22/64 scope global dynamic mngtmpaddr noprefixroute
        valid_lft 85234sec preferred_lft 14943sec
@@ -462,18 +443,16 @@ After `radvd` is up and running, check the physical host's bridge interface with
 
 your bridge is responding to the network announcements. Go back to the network configuration above and add `accept-ra: false` for Netplan or `IPv6AcceptRA=no` for systemd-networkd. On your bridge, all routes must be static (i.e. no `dynamic` modifier) and valid and preferred forever:
 
-.Correct routes on br0
 ----
     inet6 2a01:4f8:1:2345:abc:4680:1:22/64 scope global
        valid_lft forever preferred_lft forever
 ----
+====
 
-The `route` section advertises that _this_ system routes the `64:ff9b::` network. Only with this definition the virtual servers know where to send the packets for the emulated IPv6 addresses for the IPv4-only servers to.
-
-After changing the configuration, restart `radvd` and check its output with `radvdump`. It should contain both the DNS server and the NAT64 route.
+If you ever change the configuration, restart `radvd` and check its output with `radvdump`. It should contain both the DNS server and the NAT64 route.
 
 .The nasty Hetzner pitfall
-CAUTION: In https://wiki.hetzner.de/index.php/Zusaetzliche_IP-Adressen/en[their own documentation], Hetzner also describes how to setup `radvd`. For the DNS servers, however, they use IPv6 example addresses from the `2001:db8` realm. It took me three days and severe doubts about Hetzner's IPv6 setup to find out, that my only mistake was to copy these wrong IP addresses for the DNS server into the configuration. Don't make the same mistake...
+CAUTION: In https://wiki.hetzner.de/index.php/Zusaetzliche_IP-Adressen/en[their own documentation], Hetzner also describes how to setup `radvd`. For the DNS servers, however, they use IPv6 example addresses from the `2001:db8` realm. It took me three days and severe doubts on Hetzner's IPv6 setup to find out, that my only mistake was to copy these wrong IP addresses for the DNS server into the configuration. Don't make the same mistake...
 
 You have now prepared everything for the IPv6-only virtual machines to come: They get their network configuration through the centrally administrated `radvd`. The advertised setup includes a name server with DNS64 an a NAT64 route to access IPv4-only systems.
 
@@ -481,49 +460,38 @@ You have now prepared everything for the IPv6-only virtual machines to come: The
 NOTE: So far, this document describes how to setup a root server with virtual machines. Especially NAT64/DNS64 is completely independent of that. If you administrate a (real) computer network and want to lay ground for IPv6-only machines in that, do exactly the same with your physical machines: Install Tayga and the DNS64-capable Bind9 on router behind which the IPv6-only systems reside. This might be the "firewall" of classical setups. Then, your actual computers play the role of the virtual machines in this guide.
 
 
-=== Virtualisation with KVM
+== Install KVM and finish the setup
 
-We're now ready for the final steps! Our network is configured far enough so that we really can start installing virtual machines on our system. For this, we of course need KVM. For Ubuntu, I followed the first steps of https://www.linuxtechi.com/install-configure-kvm-ubuntu-18-04-server/[this guide]:
+We're now ready for the final steps! Our network is configured far enough so that we really can start installing virtual machines on our system. For this, we of course need KVM.
 
-First, check that the system supports virtualisation at all. Issue
 
+=== Install `libvirtd` and its environment
+
+For Ubuntu, I followed the first steps of https://www.linuxtechi.com/install-configure-kvm-ubuntu-18-04-server/[this guide]. On Ubuntu 22.04 the installation command is
+
+.Command to install KVM on Ubuntu 22.04
 ----
-egrep -c '(vmx|svm)' /proc/cpuinfo
-----
-
-and verify that the result is greater then 0. Then, apply
-
-----
-apt install cpu-checker
-kvm-ok
+apt install bridge-utils libguestfs-tools libosinfo-bin libvirt-clients libvirt-daemon-system libvirt-daemon virtinst qemu qemu-system-x86
 ----
 
-and check that the result is
-
-----
-INFO: /dev/kvm exists
-KVM acceleration can be used
-----
-
-If not, the BIOS settings of the system must be corrected. Contact the hosting provider to sort that out.
-
-Now you can install KVM and the required helper packages. On Ubuntu 20.04 the command is
+On Ubuntu 20.04 or 18.04 the list of packages is slightly different
 
 .Command to install KVM on Ubuntu 20.04
 ----
-apt install qemu-kvm libvirt-daemon bridge-utils virtinst libvirt-daemon-system virt-top libguestfs-tools libosinfo-bin qemu-system virt-manager
+apt install bridge-utils libguestfs-tools libosinfo-bin libvirt-daemon libvirt-daemon-system qemu-kvm qemu-system virtinst virt-top
 ----
 
-On Ubuntu 18.04 or 16.04 the list of packages is slightly different
-
-.Command to install KVM on Ubuntu 18.04 or 16.04
+.Command to install KVM on Ubuntu 18.04
 ----
-apt install qemu qemu-kvm libvirt-bin bridge-utils virt-manager
+apt install bridge-utils libvirt-bin qemu qemu-kvm
 ----
 
 This will install a rather large number of new packages on your host. Finally, it will be capable to serve virtual machines.
 
-Next step is to load the `vhost_net` module into the kernel and make it available permanently:
+
+=== Load the virtual network module
+
+Next step is to load the `vhost_net` module into the kernel and make it available permanently. This increases the efficiency of networking for the virtual machines as more work can be done in kernel context and data can be copied less often within the system. Issue two commands:
 
 ----
 modprobe vhost_net
@@ -535,17 +503,24 @@ The `libvirtd` daemon should already be up and running at this point. If this is
 .Do NOT install dnsmasq on Ubuntu 20.04
 [WARNING]
 ====
-If you look into the start messages with `systemctl status libvirtd`, you might see a message `Cannot check dnsmasq binary /usr/sbin/dnsmasq: No such file or directory`. *Do not install the dnsmasq package!* The message is misleading and gone with the next restart. If you install dnsmasq, it will fight with bind on the port and your DNS64 service will become unreliable!
+If you look into the start messages with `systemctl status libvirtd` on Ubuntu 20.04, you might see a message `Cannot check dnsmasq binary /usr/sbin/dnsmasq: No such file or directory`. *Do not install the dnsmasq package!* The message is misleading and gone with the next restart. If you install dnsmasq, it will fight with bind on the port and your DNS64 service will become unreliable!
+
+Ubuntu 22.04 does not seem to have this quirk.
 
 Note that even if you do not install dnsmasq, you will have a `dnsmasq` process running on the system. This is ok! This program comes from the `dnsmasq-base` package and runs _aside_ of bind without interfering with it.
 ====
 
-To simplify installation and administration of your virtual machines, add the "normal" user you created above to the `libvirt` user group. I prefer doing this by simply adding the user name to the definition in `/etc/group`:
 
-.Add USERNAME to the libvirt user group in /etc/group
-----
-libvirt:x:<groupid>:USERNAME
-----
+=== Create a non-root user on the system.
+
+To simplify installation and administration of your virtual machines, you should add a "normal" user to the system and allow that user to administrate the virtual machines.
+
+* Create the user with `adduser --disabled-password --gecos "<user name>" <login>`.
+
+* Add the user to the `libvirt` group with `usermod -a -G libvirt <login>.`.
+
+* Put your ssh public key into `.ssh/authorized_keys` of the user.
+
 
 You should perform a final reboot after these steps to be sure that everything works together correctly and comes up again after a reboot.
 
