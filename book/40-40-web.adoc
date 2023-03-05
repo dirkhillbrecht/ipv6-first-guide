@@ -117,6 +117,8 @@ We assume the certificates below `/etc/letsencrypt`.
 
 Install apache2. Then, enable rewrite using `a2enmod ssl rewrite`. This is needed for encryption and the mandatory redirect from http to https.
 
+==== Setup a website
+
 Create the configuration, e.g. in `/etc/apache2/sites-available/testsite.conf`:
 
 .Apache configuration on the virtual machine
@@ -143,7 +145,7 @@ Create the configuration, e.g. in `/etc/apache2/sites-available/testsite.conf`:
     # Logging
     ErrorLog ${APACHE_LOG_DIR}/www.example.org-error.log
     CustomLog ${APACHE_LOG_DIR}/www.example.org-access.log combined
-    
+
     # Actual content definitions
     DocumentRoot /usr/local/webspace/www.example.org
     <Directory /usr/local/webspace/www.example.org>
@@ -155,6 +157,35 @@ Create the configuration, e.g. in `/etc/apache2/sites-available/testsite.conf`:
 ----
 
 Enable the website using `a2ensite testsite.conf`. Now, it is available via IPv6. Note that this is more or less the "normal" setup of an Apache-served website.
+
+[[webserver-logging]]
+==== Prepare logging of IPv4 requests
+
+The Apache web server on the virtual machine sees the requests sent via IPv6 directly and with the correct sender IP address.
+It can therefore log them correctly.
+Requests sent via IPv4, however, will be proxied by the physical host and forwarded via IPv6.
+The virtual server sees them also sent via IPv6 and with the source address of the physical host.
+
+However, the physical host will add _automatically_ an `X-Forwarded-For` header to the forwarded request containing the original sender address it received the request from.
+This automatic addition is triggered as the `ProxyPass` directive passes an SSL-encrypted incoming connection to an SSL-encrypted proxying target - in which case Apache adds this header automatically.
+
+This allows us to evaluate this original IPv4 source address on the IPv6-only web server.
+This is done by Apache\'s remote IP module which is installed automatically but not enabled by default.
+You can activate remote IP handling globally by adding a configuration file `/etc/apache2/mods-available/remoteip.conf`:
+
+./etc/apache2/mods-available/remoteip.conf
+----
+RemoteIPHeader X-Forwarded-For
+RemoteIPInternalProxy 1:2:3::8 # IPv6 address of the physical host
+----
+
+After adding this file, run `a2enmod remoteip`.
+It enables the remote IP evaluation module and this global configuration.
+
+This activates evaluation of the `X-Forwarded-For` header for all virtual hosts on the Apache web server.
+Furthermore, it restricts evaluation of the forwarded IP source address to requests coming from our own reverse proxy.
+This way, our IPv6-only web server can (and will) log the original IP addresses from requests sent via IPv4 to all virtual hosts.
+
 
 === Setup the IPv4 reverse proxy on the physical host
 

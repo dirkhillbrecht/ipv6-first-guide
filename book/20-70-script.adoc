@@ -43,7 +43,7 @@ My server also needed up to 7 minutes for each reboot. The reason for these dela
 
 As the system reboots in between, the connection to the console is lost. The script logs all console output also to `/var/log/install-kvm.log` so that one knows what actually happened and whether any errors occurred.
 
-Currently, discovering the end of the script's operation is done by monitoring the server. If it has rebooted three times, the script has finished. If it has been successfull, there is neither a `/var/lib/install-kvm/config` nor a `/var/lib/install-kvm/stage` file. In any case, `/var/log/install-kvm.log` contains the output of all (executed) script stages and ends either in a success message or with an error message describing what went wrong.
+Currently, discovering the end of the script's operation is done by monitoring the server. If it has rebooted three times, the script has finished. If it has been successful, there is neither a `/var/lib/install-kvm/config` nor a `/var/lib/install-kvm/stage` file. In any case, `/var/log/install-kvm.log` contains the output of all (executed) script stages and ends either in a success message or with an error message describing what went wrong.
 
 
 === Operation modes

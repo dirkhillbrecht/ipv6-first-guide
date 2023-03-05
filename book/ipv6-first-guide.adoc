@@ -2,7 +2,7 @@
 
 = IPv6-first network configurations with Linux and KVM
 :Author: Dirk Hillbrecht
-:Date: 2022-12-30
+:Date: 2023-03-05
 :pdf-page-size: A4
 :pdf-style: ../lib/pdf-theme.yml
 :lang: en
