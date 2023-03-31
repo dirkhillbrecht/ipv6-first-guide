@@ -4,6 +4,7 @@ You can install any operating system which is capable of running in a virtualize
 
 One very nice thing about virtualisation is that you can install the operating system in the virtual machine _just as if you sat in front of the machine's console_. KVM virtualisation and virt-manager forward a (virtual) keyboard, mouse and screen so that you can interact with the system even when it has no internet connection - which is the usual situation during the initial installation of the operating system. This makes you completely independent of the hosting provider and allows you to install _any_ operating system in your virtual machine (as long as it supports IPv6 and SLAAC).
 
+[[ssec-vm-ubuntu-2204]]
 === Ubuntu 22.04
 
 In this section, I give some advises for the Ubuntu 22.04 installer. Note that Ubuntu has changed the installer completely compared to Ubuntu 20.04 so the menu is much different.
@@ -44,6 +45,107 @@ network:
       dhcp4: false
 ----
 
+[[ssec-vm-nixos-2211]]
+=== NixOS 22.11
+
+.Heavy under construction
+WARNING: NixOS instructions have been added only recently. They are far from finished and even more subject to change than the rest of this document!
+
+NixOS follows a unique declarative configuration style.
+The whole system is configured by a static description which is rolled out by "nix", a kind of preprocessor and package manager.
+NixOS offers capabilities as atomic updates and per-package dependency chains,
+i.e. it allows to have multiple versions of libraries and even programms installed in parallel.
+
+==== Network configuration
+
+NixOS networking can be configured like this to work with the IPv6-first setup:
+
+.Suggested /etc/nixos/network.nix configuration file for a NixOS 22.11 virtual machine
+----
+{ config, pkgs, ... }:
+
+let
+  device = "enp1s0"; # <- Set this to the actual network device
+in {
+  networking.tempAddresses = "disabled";
+  systemd.network = {
+    enable = true;
+    wait-online = {
+      anyInterface = true;
+      extraArgs = [ "--ipv6" "--interface=${device}" ];
+      timeout=3;
+    };
+    networks.${device} = {
+      enable = true;
+      DHCP="ipv6";
+      ipv6AcceptRAConfig = {
+        DHCPv6Client = "always";
+        UseDNS = true;
+      };
+    };
+  };
+}
+----
+
+You have to change the `device` setting at the beginning to name the actual device in your system.
+
+Note that the `systemd.network.wait-online` service is notoriously problematic.
+I tamed its unwillingness to detect successful network configuration by setting
+
+* `anyInterface` to true,
+* explicitly constraining it to IPv6 and the specific interface with the `extraArgs`
+* decreasing its timeout vastly.
+
+Almost surely this can be simplified considerably. It has to be evaluated further.
+
+After all, include the `/etc/nixos/network.nix` file into the main configuration in `/etc/nixos/configuration.nix`:
+
+.Inclusion of network.nix in /etc/nixos/configuration.nix
+----
+{ config, pkgs, ... }:
+
+{
+  imports =
+    [
+      [...]
+      ./network.nix
+      [...]
+    ];
+
+  [...]
+}
+----
+
+With this, the interface should be initialized correctly with the IPv6 address derived from the virtual MAC address:
+
+.Network configuration on a NixOS virtual machine
+----
+# ip a
+[...]
+2: enp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 52:54:00:ba:b4:bf brd ff:ff:ff:ff:ff:ff
+    inet 169.254.132.92/16 brd 169.254.255.255 scope global noprefixroute enp1s0
+       valid_lft forever preferred_lft forever
+    inet6 2a01:4f8:1:3:5054:ff:feba:b4bf/64 scope global mngtmpaddr noprefixroute
+       valid_lft forever preferred_lft 14249sec
+    inet6 fe80::5054:ff:feba:b4bf/64 scope link
+       valid_lft forever preferred_lft forever
+----
+
+Note that change to the network configuration are applied by `nixos-rebuild switch` as given.
+This could lead, however, to a connection loss if the configuration changes "too much".
+You should consider applying these changes via a console connection to the virtual machine.
+
+==== Anything else
+
+For the rest, you can follow the standard https://nixos.org/manual/nixos/stable/index.html#sec-installation-manual[NixOS manual install instructions]. Some notes:
+
+* Use the minimal ISO image without graphical installer at the bottom of the https://nixos.org/download.html#nixos-iso[NixOS download page]. Command line rulz!
+* There should be no need to configure the installation network manually. The NixOS install environment works nicely together with our IPv6-first setup.
+* KVM/QEMU environments do not offer (U)EFI, so follow the BIOS/MBR-based partitioning instructions.
+* The suggested partition scheme with one big partition for all actually makes sense.
+* To shutdown the system, use the `poweroff` command. `halt` will not shutdown the QEMU environment leaving the virtual machine in limbo.
+* NixOS boots and reboots really fast!
 
 === Ubuntu 20.04
 
