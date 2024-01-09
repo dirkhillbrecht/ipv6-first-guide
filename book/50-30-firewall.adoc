@@ -64,8 +64,8 @@ It contains the "virtual bridge" devices `virbrX` which are created by KVM autom
 We do not use them as they open a routed (and address-translated) IPv4 network for virtual machines with private IPv4 addresses.
 You should leave the specification intact, however, as it might be handy for actual local networks.
 
-On the IPv6 side, this is enough assign the correct interfaces to the zones and to enable Tayga's NAT64 mechanism.
-You do not need to add any *policy* sets regarding the `nat64` zone in the IPv6 protocol.
+On the IPv6 side, this is enough to assign the correct interfaces to the zones and to enable Tayga's NAT64 mechanism.
+You do not need to add any *policy* settings regarding the `nat64` zone in the IPv6 protocol.
 
 With this setup declared, outgoing connections are generally allowed while incoming connections are completely blocked.
 As the server is only remotely accessible, this is not really optimal.
